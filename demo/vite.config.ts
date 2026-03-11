@@ -27,6 +27,16 @@ export default defineConfig({
   build: {
     outDir: "../dist",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Use 'es' format for workers to support code-splitting
+        format: 'es',
+      },
+    },
+  },
+
+  worker: {
+    format: 'es',
   },
 });
 
