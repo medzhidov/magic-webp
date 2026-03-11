@@ -5,9 +5,11 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",
-    "rootDir": "./src-js"
+    "rootDir": "./src-js",
+    "skipLibCheck": true,
+    "allowJs": true
   },
   "include": ["src-js/**/*.ts"],
-  "exclude": ["src-js/**/*.test.ts", "demo", "tests"]
+  "exclude": ["src-js/**/*.test.ts", "demo", "tests", "pkg"]
 }
 
