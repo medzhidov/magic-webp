@@ -17,3 +17,9 @@ declare module '*.mjs' {
   export default content;
 }
 
+// Asset imports with ?url suffix
+declare module '*?url' {
+  const url: string;
+  export default url;
+}
+

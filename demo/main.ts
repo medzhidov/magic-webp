@@ -5,6 +5,7 @@
 
 import { MagicWebpWorker, setDebugMode } from '../src-js/index.js';
 import WorkerUrl from '../src-js/worker.ts?worker&url';
+import giphyWebpUrl from './giphy.webp?url';
 
 // Enable debug mode for demo (disabled by default in production)
 setDebugMode(true);
@@ -17,7 +18,7 @@ console.log("[demo] MagicWebpWorker created");
 // Auto-load default image on page load
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    const response = await fetch('./giphy.webp');
+    const response = await fetch(giphyWebpUrl);
     const blob = await response.blob();
     const file = new File([blob], 'giphy.webp', { type: 'image/webp' });
     loadFile(file);
