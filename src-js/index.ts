@@ -87,6 +87,25 @@ async function ensureWasm(): Promise<void> {
   console.log("[magic-webp] WASM module ready");
 }
 
+// ── Operation Queue (for thread-safety) ───────────────────────────────────
+
+/**
+ * Promise-based operation queue to ensure thread-safety.
+ * WASM module uses global state (error messages, memory allocation),
+ * so we must serialize all operations to prevent race conditions.
+ */
+let operationQueue = Promise.resolve();
+
+/**
+ * Enqueue an operation to run sequentially.
+ * This ensures that only one WASM operation runs at a time.
+ */
+function enqueueOperation<T>(operation: () => T | Promise<T>): Promise<T> {
+  const promise = operationQueue.then(operation, operation);
+  operationQueue = promise.then(() => {}, () => {});
+  return promise;
+}
+
 // ── Helper functions ──────────────────────────────────────────────────────
 
 function getLastError(): string {
@@ -104,7 +123,11 @@ async function getWebPDimensions(webpData: Uint8Array): Promise<{ width: number;
   return dimensions;
 }
 
-function processWebP(
+/**
+ * Internal function to process WebP data through WASM.
+ * This function is NOT thread-safe and should only be called through enqueueOperation.
+ */
+function processWebPInternal(
   webpData: Uint8Array,
   operation: (dataPtr: number, dataSize: number, outSizePtr: number) => number
 ): Uint8Array {
@@ -170,6 +193,19 @@ function processWebP(
   }
 }
 
+/**
+ * Thread-safe wrapper for WebP processing.
+ * Enqueues the operation to prevent concurrent WASM access.
+ */
+function processWebP(
+  webpData: Uint8Array,
+  operation: (dataPtr: number, dataSize: number, outSizePtr: number) => number
+): Uint8Array {
+  // Note: We can't use enqueueOperation here because this function is synchronous
+  // and called from synchronous methods. The queue is applied at the MagicWebp method level.
+  return processWebPInternal(webpData, operation);
+}
+
 // ── MagicWebp class ───────────────────────────────────────────────────────
 
 export class MagicWebp {
@@ -216,61 +252,79 @@ export class MagicWebp {
     return MagicWebp.fromBlob(blob);
   }
 
-  // ── Operations (chainable, each returns a new MagicWebp) ──────────────
+  // ── Operations (chainable, each returns a Promise<MagicWebp>) ────────
 
-  crop(x: number, y: number, width: number, height: number): MagicWebp {
-    console.log(`[magic-webp] Cropping: ${x},${y} ${width}x${height}`);
-    const result = processWebP(this._data, (dataPtr, dataSize, outSizePtr) => {
-      return wasmModule!._magic_webp_crop(
-        dataPtr,
-        dataSize,
-        x,
-        y,
-        width,
-        height,
-        outSizePtr
-      );
+  /**
+   * Crop the WebP image to the specified region.
+   * Operations are queued to ensure thread-safety.
+   */
+  async crop(x: number, y: number, width: number, height: number): Promise<MagicWebp> {
+    return enqueueOperation(() => {
+      console.log(`[magic-webp] Cropping: ${x},${y} ${width}x${height}`);
+      const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
+        return wasmModule!._magic_webp_crop(
+          dataPtr,
+          dataSize,
+          x,
+          y,
+          width,
+          height,
+          outSizePtr
+        );
+      });
+      console.log(`[magic-webp] Crop result: ${result.length} bytes`);
+      // Result dimensions are the crop dimensions
+      return new MagicWebp(result, width, height);
     });
-    console.log(`[magic-webp] Crop result: ${result.length} bytes`);
-    // Result dimensions are the crop dimensions
-    return new MagicWebp(result, width, height);
   }
 
-  resize(width: number, height: number): MagicWebp {
-    const result = processWebP(this._data, (dataPtr, dataSize, outSizePtr) => {
-      return wasmModule!._magic_webp_resize(
-        dataPtr,
-        dataSize,
-        width,
-        height,
-        outSizePtr
-      );
+  /**
+   * Resize the WebP image to exact dimensions.
+   * Operations are queued to ensure thread-safety.
+   */
+  async resize(width: number, height: number): Promise<MagicWebp> {
+    return enqueueOperation(() => {
+      const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
+        return wasmModule!._magic_webp_resize(
+          dataPtr,
+          dataSize,
+          width,
+          height,
+          outSizePtr
+        );
+      });
+      // Result dimensions are the target dimensions
+      return new MagicWebp(result, width, height);
     });
-    // Result dimensions are the target dimensions
-    return new MagicWebp(result, width, height);
   }
 
-  resizeFit(maxWidth: number, maxHeight: number): MagicWebp {
-    const result = processWebP(this._data, (dataPtr, dataSize, outSizePtr) => {
-      return wasmModule!._magic_webp_resize_fit(
-        dataPtr,
-        dataSize,
-        maxWidth,
-        maxHeight,
-        outSizePtr
-      );
+  /**
+   * Resize the WebP image to fit within max dimensions (preserves aspect ratio).
+   * Operations are queued to ensure thread-safety.
+   */
+  async resizeFit(maxWidth: number, maxHeight: number): Promise<MagicWebp> {
+    return enqueueOperation(() => {
+      const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
+        return wasmModule!._magic_webp_resize_fit(
+          dataPtr,
+          dataSize,
+          maxWidth,
+          maxHeight,
+          outSizePtr
+        );
+      });
+
+      // Calculate fitted dimensions (preserve aspect ratio)
+      if (this._width && this._height) {
+        const scale = Math.min(maxWidth / this._width, maxHeight / this._height);
+        const newWidth = Math.round(this._width * scale);
+        const newHeight = Math.round(this._height * scale);
+        return new MagicWebp(result, newWidth, newHeight);
+      }
+
+      // If we don't know original dimensions, return without dimensions
+      return new MagicWebp(result);
     });
-
-    // Calculate fitted dimensions (preserve aspect ratio)
-    if (this._width && this._height) {
-      const scale = Math.min(maxWidth / this._width, maxHeight / this._height);
-      const newWidth = Math.round(this._width * scale);
-      const newHeight = Math.round(this._height * scale);
-      return new MagicWebp(result, newWidth, newHeight);
-    }
-
-    // If we don't know original dimensions, return without dimensions
-    return new MagicWebp(result);
   }
 
   // ── Output ─────────────────────────────────────────────────────────────
@@ -311,7 +365,8 @@ export async function cropWebp(
   const img = typeof input === "string"
     ? await MagicWebp.fromUrl(input)
     : await MagicWebp.fromBlob(input);
-  return img.crop(options.x, options.y, options.width, options.height).toBlob();
+  const result = await img.crop(options.x, options.y, options.width, options.height);
+  return result.toBlob();
 }
 
 export async function resizeWebp(
@@ -321,7 +376,8 @@ export async function resizeWebp(
   const img = typeof input === "string"
     ? await MagicWebp.fromUrl(input)
     : await MagicWebp.fromBlob(input);
-  return img.resize(options.width, options.height).toBlob();
+  const result = await img.resize(options.width, options.height);
+  return result.toBlob();
 }
 
 export async function resizeFitWebp(
@@ -331,6 +387,7 @@ export async function resizeFitWebp(
   const img = typeof input === "string"
     ? await MagicWebp.fromUrl(input)
     : await MagicWebp.fromBlob(input);
-  return img.resizeFit(options.maxWidth, options.maxHeight).toBlob();
+  const result = await img.resizeFit(options.maxWidth, options.maxHeight);
+  return result.toBlob();
 }
 

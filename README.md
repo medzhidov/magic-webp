@@ -10,6 +10,7 @@ Browser-based **animated WebP** processing via WebAssembly. Crop, resize, and tr
 - 🚀 **Fast** — native libwebp via WASM
 - 🌐 **Browser-only** — no server required
 - 📦 **Zero dependencies** — pure WebAssembly
+- 🔒 **Thread-safe** — concurrent operations are automatically queued
 
 ## 🚀 Quick Start
 
@@ -20,13 +21,13 @@ import { MagicWebp } from 'magic-webp';
 const img = await MagicWebp.fromFile(file);
 
 // Crop to 200x200 from top-left
-const cropped = img.crop(0, 0, 200, 200);
+const cropped = await img.crop(0, 0, 200, 200);
 
 // Resize to exact dimensions
-const resized = img.resize(400, 300);
+const resized = await img.resize(400, 300);
 
 // Resize to fit within bounds (preserves aspect ratio)
-const fitted = img.resizeFit(500, 500);
+const fitted = await img.resizeFit(500, 500);
 
 // Get result as Blob
 const blob = cropped.toBlob();
@@ -104,13 +105,15 @@ magic-webp/
 
 #### Instance Methods
 
-- `crop(x: number, y: number, width: number, height: number): MagicWebp`
-- `resize(width: number, height: number): MagicWebp`
-- `resizeFit(maxWidth: number, maxHeight: number): MagicWebp`
+- `crop(x: number, y: number, width: number, height: number): Promise<MagicWebp>`
+- `resize(width: number, height: number): Promise<MagicWebp>`
+- `resizeFit(maxWidth: number, maxHeight: number): Promise<MagicWebp>`
 - `toBlob(): Blob`
 - `toBytes(): Uint8Array`
 - `toDataUrl(): Promise<string>`
 - `toObjectUrl(): string`
+
+**Note:** All transformation methods (`crop`, `resize`, `resizeFit`) are now asynchronous and return `Promise<MagicWebp>`. Operations are automatically queued to ensure thread-safety.
 
 ### Standalone Functions
 
@@ -129,6 +132,24 @@ const blob3 = await resizeFitWebp(file, { maxWidth: 500, maxHeight: 500 });
 - Animated sticker processing
 - WebP optimization tools
 - Social media image tools
+
+## 🔒 Thread Safety
+
+All operations are automatically queued to prevent race conditions. You can safely call multiple operations concurrently:
+
+```typescript
+// These operations will be queued and executed sequentially
+const [cropped, resized, fitted] = await Promise.all([
+  img.crop(0, 0, 100, 100),
+  img.resize(200, 200),
+  img.resizeFit(150, 150)
+]);
+
+// Process multiple images concurrently - also safe!
+const results = await Promise.all(
+  images.map(img => img.resize(100, 100))
+);
+```
 
 ## 🧪 Testing
 

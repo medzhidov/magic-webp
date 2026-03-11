@@ -59,12 +59,12 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         if (!original) {
           throw new Error('No image loaded');
         }
-        
+
         console.log('[worker] Cropping:', msg.x, msg.y, msg.width, msg.height);
-        const result = original.crop(msg.x, msg.y, msg.width, msg.height);
+        const result = await original.crop(msg.x, msg.y, msg.width, msg.height);
         const blob = result.toBlob();
         const arrayBuffer = await blob.arrayBuffer();
-        
+
         self.postMessage({
           type: 'result',
           operation: 'crop',
@@ -74,17 +74,17 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         });
         break;
       }
-      
+
       case 'resize': {
         if (!original) {
           throw new Error('No image loaded');
         }
-        
+
         console.log('[worker] Resizing:', msg.width, msg.height);
-        const result = original.resize(msg.width, msg.height);
+        const result = await original.resize(msg.width, msg.height);
         const blob = result.toBlob();
         const arrayBuffer = await blob.arrayBuffer();
-        
+
         self.postMessage({
           type: 'result',
           operation: 'resize',
@@ -94,17 +94,17 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         });
         break;
       }
-      
+
       case 'resizeFit': {
         if (!original) {
           throw new Error('No image loaded');
         }
-        
+
         console.log('[worker] Resize fit:', msg.maxWidth, msg.maxHeight);
-        const result = original.resizeFit(msg.maxWidth, msg.maxHeight);
+        const result = await original.resizeFit(msg.maxWidth, msg.maxHeight);
         const blob = result.toBlob();
         const arrayBuffer = await blob.arrayBuffer();
-        
+
         self.postMessage({
           type: 'result',
           operation: 'resizeFit',
