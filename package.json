@@ -1,6 +1,6 @@
 {
   "name": "magic-webp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Fast WebP (static and animated) image processing in the browser using WebAssembly",
   "keywords": [
     "webp",
@@ -20,19 +20,31 @@
     "url": "git+https://github.com/medzhidov/magic-webp.git"
   },
   "type": "module",
-  "main": "./pkg/magic_webp.mjs",
-  "types": "./pkg/magic_webp.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    }
+  },
   "files": [
+    "dist/**/*",
     "pkg/*.mjs",
     "pkg/*.wasm",
     "pkg/*.d.ts",
-    "pkg/package.json",
-    "src-js/worker.ts"
+    "pkg/package.json"
   ],
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build:wasm": "node -e \"process.platform === 'win32' ? require('child_process').execSync('powershell -ExecutionPolicy Bypass -File build.ps1', {stdio: 'inherit'}) : require('child_process').execSync('bash build.sh', {stdio: 'inherit'})\"",
     "build:wasm:dev": "node -e \"process.platform === 'win32' ? require('child_process').execSync('powershell -ExecutionPolicy Bypass -File build.ps1', {stdio: 'inherit'}) : require('child_process').execSync('bash build.sh', {stdio: 'inherit'})\"",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build": "pnpm run build:wasm && pnpm run build:ts",
     "demo": "pnpm run build:wasm && pnpm run demo:watch",
     "demo:watch": "vite demo",
     "demo:build": "pnpm run build:wasm && vite build demo",
@@ -40,7 +52,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:native": "powershell -ExecutionPolicy Bypass -File test-native.ps1",
-    "prepublishOnly": "pnpm run build:wasm"
+    "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",
