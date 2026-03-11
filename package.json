@@ -21,8 +21,8 @@
   ],
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build:wasm": "powershell -ExecutionPolicy Bypass -File build.ps1",
-    "build:wasm:dev": "powershell -ExecutionPolicy Bypass -File build.ps1",
+    "build:wasm": "node -e \"process.platform === 'win32' ? require('child_process').execSync('powershell -ExecutionPolicy Bypass -File build.ps1', {stdio: 'inherit'}) : require('child_process').execSync('bash build.sh', {stdio: 'inherit'})\"",
+    "build:wasm:dev": "node -e \"process.platform === 'win32' ? require('child_process').execSync('powershell -ExecutionPolicy Bypass -File build.ps1', {stdio: 'inherit'}) : require('child_process').execSync('bash build.sh', {stdio: 'inherit'})\"",
     "demo": "pnpm run build:wasm && pnpm run demo:watch",
     "demo:watch": "vite demo",
     "demo:build": "pnpm run build:wasm && vite build demo",
