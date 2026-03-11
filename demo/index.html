@@ -178,6 +178,39 @@
 
     <div id="statusContainer"></div>
 
+    <!-- Quality Control -->
+    <div class="control-group">
+      <h3>🎚️ Output Quality</h3>
+      <div style="margin-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 8px;">
+          <input type="range" id="qualitySlider" min="0" max="100" value="90"
+                 style="flex: 1; height: 6px; cursor: pointer;">
+          <span id="qualityValue" style="font-weight: 600; min-width: 80px; text-align: right;">90 (High)</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-top: 5px;">
+          <button onclick="setQuality(60)" style="padding: 4px 8px; font-size: 11px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
+            📦 High Compression (60)
+          </button>
+          <button onclick="setQuality(75)" style="padding: 4px 8px; font-size: 11px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
+            ⚖️ Balanced (75)
+          </button>
+          <button onclick="setQuality(90)" style="padding: 4px 8px; font-size: 11px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
+            ✨ High Quality (90)
+          </button>
+          <button onclick="setQuality(100)" style="padding: 4px 8px; font-size: 11px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
+            💎 Lossless (100)
+          </button>
+        </div>
+        <div style="font-size: 11px; color: #888; margin-top: 8px; line-height: 1.4;">
+          <strong>Recommendations:</strong><br>
+          • <strong>60-70:</strong> Small file size, visible compression (good for thumbnails)<br>
+          • <strong>75-85:</strong> Balanced quality/size (recommended for most cases)<br>
+          • <strong>90-95:</strong> High quality, minimal artifacts (for important images)<br>
+          • <strong>100:</strong> Lossless, largest file size (perfect quality preservation)
+        </div>
+      </div>
+    </div>
+
     <!-- Quick Actions -->
     <div class="control-group">
       <h3>⚡ Quick Actions</h3>

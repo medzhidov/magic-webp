@@ -33,6 +33,7 @@ export type Position =
 export interface ResizeOptions {
   mode?: FitMode;
   position?: Position;
+  quality?: number;  // 0-100, default 90
 }
 
 // ── Emscripten WASM types ─────────────────────────────────────────────────
@@ -47,6 +48,7 @@ interface EmscriptenModule {
     y: number,
     width: number,
     height: number,
+    quality: number,
     outSizePtr: number
   ): number;
   _magic_webp_resize(
@@ -54,6 +56,7 @@ interface EmscriptenModule {
     dataSize: number,
     width: number,
     height: number,
+    quality: number,
     outSizePtr: number
   ): number;
   _magic_webp_resize_fit(
@@ -61,6 +64,7 @@ interface EmscriptenModule {
     dataSize: number,
     maxWidth: number,
     maxHeight: number,
+    quality: number,
     outSizePtr: number
   ): number;
   _magic_webp_resize_cover(
@@ -70,6 +74,7 @@ interface EmscriptenModule {
     targetHeight: number,
     cropX: number,
     cropY: number,
+    quality: number,
     outSizePtr: number
   ): number;
   _magic_webp_free(ptr: number): void;
@@ -275,10 +280,12 @@ export class MagicWebp {
   /**
    * Crop the WebP image to the specified region.
    * Operations are queued to ensure thread-safety.
+   *
+   * @param quality - Output quality (0-100, default 90)
    */
-  async crop(x: number, y: number, width: number, height: number): Promise<MagicWebp> {
+  async crop(x: number, y: number, width: number, height: number, quality: number = 90): Promise<MagicWebp> {
     return enqueueOperation(() => {
-      console.log(`[magic-webp] Cropping: ${x},${y} ${width}x${height}`);
+      console.log(`[magic-webp] Cropping: ${x},${y} ${width}x${height}, quality: ${quality}`);
       const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
         return wasmModule!._magic_webp_crop(
           dataPtr,
@@ -287,6 +294,7 @@ export class MagicWebp {
           y,
           width,
           height,
+          quality,
           outSizePtr
         );
       });
@@ -324,6 +332,7 @@ export class MagicWebp {
   async resize(width: number, height: number, options?: ResizeOptions): Promise<MagicWebp> {
     const mode = options?.mode || 'cover';
     const position = options?.position || 'center';
+    const quality = options?.quality !== undefined ? options.quality : 90;
 
     if (!this._width || !this._height) {
       throw new Error('Image dimensions unknown');
@@ -332,38 +341,38 @@ export class MagicWebp {
     return enqueueOperation(async () => {
       switch (mode) {
         case 'fill':
-          return this._resizeFill(width, height);
+          return this._resizeFill(width, height, quality);
 
         case 'contain':
-          return this._resizeContain(width, height);
+          return this._resizeContain(width, height, quality);
 
         case 'inside':
-          return this._resizeInside(width, height);
+          return this._resizeInside(width, height, quality);
 
         case 'outside':
-          return this._resizeOutside(width, height, position);
+          return this._resizeOutside(width, height, position, quality);
 
         case 'cover':
         default:
-          return this._resizeCover(width, height, position);
+          return this._resizeCover(width, height, position, quality);
       }
     });
   }
 
   // ── Private resize implementations ────────────────────────────────────
 
-  private _resizeFill(width: number, height: number): MagicWebp {
-    console.log(`[magic-webp] Resize fill: ${width}x${height}`);
+  private _resizeFill(width: number, height: number, quality: number): MagicWebp {
+    console.log(`[magic-webp] Resize fill: ${width}x${height}, quality: ${quality}`);
     const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
-      return wasmModule!._magic_webp_resize(dataPtr, dataSize, width, height, outSizePtr);
+      return wasmModule!._magic_webp_resize(dataPtr, dataSize, width, height, quality, outSizePtr);
     });
     return new MagicWebp(result, width, height);
   }
 
-  private _resizeContain(width: number, height: number): MagicWebp {
-    console.log(`[magic-webp] Resize contain: ${width}x${height}`);
+  private _resizeContain(width: number, height: number, quality: number): MagicWebp {
+    console.log(`[magic-webp] Resize contain: ${width}x${height}, quality: ${quality}`);
     const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
-      return wasmModule!._magic_webp_resize_fit(dataPtr, dataSize, width, height, outSizePtr);
+      return wasmModule!._magic_webp_resize_fit(dataPtr, dataSize, width, height, quality, outSizePtr);
     });
 
     // Calculate actual dimensions
@@ -373,7 +382,7 @@ export class MagicWebp {
     return new MagicWebp(result, newWidth, newHeight);
   }
 
-  private _resizeInside(width: number, height: number): MagicWebp {
+  private _resizeInside(width: number, height: number, quality: number): MagicWebp {
     // Don't enlarge - if image is smaller, keep original size
     if (this._width! <= width && this._height! <= height) {
       console.log(`[magic-webp] Resize inside: keeping original ${this._width}x${this._height}`);
@@ -381,26 +390,26 @@ export class MagicWebp {
     }
 
     // Otherwise, same as contain
-    return this._resizeContain(width, height);
+    return this._resizeContain(width, height, quality);
   }
 
-  private _resizeOutside(width: number, height: number, position: Position): MagicWebp {
+  private _resizeOutside(width: number, height: number, position: Position, quality: number): MagicWebp {
     // Don't reduce - if image is larger, just crop
     if (this._width! >= width && this._height! >= height) {
       console.log(`[magic-webp] Resize outside: cropping ${this._width}x${this._height} to ${width}x${height}`);
       const { x, y } = this._calculateCropPosition(this._width!, this._height!, width, height, position);
       const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
-        return wasmModule!._magic_webp_crop(dataPtr, dataSize, x, y, width, height, outSizePtr);
+        return wasmModule!._magic_webp_crop(dataPtr, dataSize, x, y, width, height, quality, outSizePtr);
       });
       return new MagicWebp(result, width, height);
     }
 
     // Otherwise, same as cover
-    return this._resizeCover(width, height, position);
+    return this._resizeCover(width, height, position, quality);
   }
 
-  private _resizeCover(width: number, height: number, position: Position): MagicWebp {
-    console.log(`[magic-webp] Resize cover: ${width}x${height}, position: ${position}`);
+  private _resizeCover(width: number, height: number, position: Position, quality: number): MagicWebp {
+    console.log(`[magic-webp] Resize cover: ${width}x${height}, position: ${position}, quality: ${quality}`);
 
     // Calculate scale to cover (scale by the larger ratio)
     const scaleX = width / this._width!;
@@ -422,6 +431,7 @@ export class MagicWebp {
         height,
         x,
         y,
+        quality,
         outSizePtr
       );
     });

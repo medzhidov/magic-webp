@@ -10,84 +10,110 @@
 // Forward declarations from magic_webp.c
 extern void set_error(const char* msg);
 
-typedef struct {
-    uint8_t* data;
-    uint32_t width;
-    uint32_t height;
-} RGBAImage;
-
-extern void free_rgba_image(RGBAImage* img);
-extern int crop_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
-                     uint32_t x, uint32_t y, uint32_t crop_w, uint32_t crop_h,
-                     RGBAImage* out);
-extern int resize_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
-                       uint32_t dst_w, uint32_t dst_h, RGBAImage* out);
-extern int resize_fit_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
-                           uint32_t max_w, uint32_t max_h, RGBAImage* out);
-extern int resize_and_crop_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
-                                uint32_t target_w, uint32_t target_h,
-                                uint32_t crop_x, uint32_t crop_y,
-                                RGBAImage* out);
-
 // ────────────────────────────────────────────────────────────────────────────
-// WebP animation processing
+// WebP animation processing with WebPPicture API (optimized)
 // ────────────────────────────────────────────────────────────────────────────
 
-typedef int (*TransformFunc)(const uint8_t*, uint32_t, uint32_t, void*, RGBAImage*);
+// Transform function that works directly with WebPPicture
+typedef int (*PictureTransformFunc)(WebPPicture* pic, void* params);
 
-// Crop transform wrapper
+// Crop transform using WebPPictureCrop
 typedef struct {
     uint32_t x, y, width, height;
 } CropParams;
 
-static int transform_crop(const uint8_t* rgba, uint32_t width, uint32_t height,
-                          void* params, RGBAImage* out) {
+static int transform_crop(WebPPicture* pic, void* params) {
     CropParams* p = (CropParams*)params;
-    return crop_rgba(rgba, width, height, p->x, p->y, p->width, p->height, out);
+
+    if (!WebPPictureCrop(pic, p->x, p->y, p->width, p->height)) {
+        set_error("WebPPictureCrop failed");
+        return 0;
+    }
+    return 1;
 }
 
-// Resize transform wrapper
+// Resize transform using WebPPictureRescale
 typedef struct {
     uint32_t width, height;
 } ResizeParams;
 
-static int transform_resize(const uint8_t* rgba, uint32_t width, uint32_t height,
-                            void* params, RGBAImage* out) {
+static int transform_resize(WebPPicture* pic, void* params) {
     ResizeParams* p = (ResizeParams*)params;
-    return resize_rgba(rgba, width, height, p->width, p->height, out);
+
+    if (!WebPPictureRescale(pic, p->width, p->height)) {
+        set_error("WebPPictureRescale failed");
+        return 0;
+    }
+    return 1;
 }
 
-// Resize fit transform wrapper
+// Resize fit transform (preserve aspect ratio)
 typedef struct {
     uint32_t max_width, max_height;
 } ResizeFitParams;
 
-static int transform_resize_fit(const uint8_t* rgba, uint32_t width, uint32_t height,
-                                void* params, RGBAImage* out) {
+static int transform_resize_fit(WebPPicture* pic, void* params) {
     ResizeFitParams* p = (ResizeFitParams*)params;
-    return resize_fit_rgba(rgba, width, height, p->max_width, p->max_height, out);
+
+    // Calculate fitted dimensions
+    float scale_w = (float)p->max_width / pic->width;
+    float scale_h = (float)p->max_height / pic->height;
+    float scale = (scale_w < scale_h) ? scale_w : scale_h;
+
+    uint32_t new_w = (uint32_t)(pic->width * scale);
+    uint32_t new_h = (uint32_t)(pic->height * scale);
+
+    if (new_w == 0) new_w = 1;
+    if (new_h == 0) new_h = 1;
+
+    if (!WebPPictureRescale(pic, new_w, new_h)) {
+        set_error("WebPPictureRescale failed");
+        return 0;
+    }
+    return 1;
 }
 
-// Resize and crop transform wrapper (for cover mode)
+// Resize and crop transform (for cover mode)
 typedef struct {
     uint32_t target_width, target_height;
     uint32_t crop_x, crop_y;
 } ResizeAndCropParams;
 
-static int transform_resize_and_crop(const uint8_t* rgba, uint32_t width, uint32_t height,
-                                     void* params, RGBAImage* out) {
+static int transform_resize_and_crop(WebPPicture* pic, void* params) {
     ResizeAndCropParams* p = (ResizeAndCropParams*)params;
-    return resize_and_crop_rgba(rgba, width, height,
-                                p->target_width, p->target_height,
-                                p->crop_x, p->crop_y, out);
+
+    // Calculate scale to cover
+    float scale_w = (float)p->target_width / pic->width;
+    float scale_h = (float)p->target_height / pic->height;
+    float scale = (scale_w > scale_h) ? scale_w : scale_h;
+
+    uint32_t scaled_w = (uint32_t)(pic->width * scale);
+    uint32_t scaled_h = (uint32_t)(pic->height * scale);
+
+    if (scaled_w == 0) scaled_w = 1;
+    if (scaled_h == 0) scaled_h = 1;
+
+    // First resize
+    if (!WebPPictureRescale(pic, scaled_w, scaled_h)) {
+        set_error("WebPPictureRescale failed");
+        return 0;
+    }
+
+    // Then crop
+    if (!WebPPictureCrop(pic, p->crop_x, p->crop_y, p->target_width, p->target_height)) {
+        set_error("WebPPictureCrop failed");
+        return 0;
+    }
+
+    return 1;
 }
 
-// Main animation processing function
+// Main animation processing function (optimized with WebPPicture API)
 static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_size,
-                                       TransformFunc transform, void* transform_params,
-                                       size_t* out_size) {
+                                       PictureTransformFunc transform, void* transform_params,
+                                       float quality, size_t* out_size) {
     *out_size = 0;
-    
+
     // Parse WebP data
     WebPData input_data = {webp_data, webp_size};
     WebPDemuxer* demux = WebPDemux(&input_data);
@@ -95,16 +121,16 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
         set_error("Failed to demux WebP data");
         return NULL;
     }
-    
+
     uint32_t frame_count = WebPDemuxGetI(demux, WEBP_FF_FRAME_COUNT);
     uint32_t loop_count = WebPDemuxGetI(demux, WEBP_FF_LOOP_COUNT);
-    
+
     if (frame_count == 0) {
         set_error("No frames found in WebP");
         WebPDemuxDelete(demux);
         return NULL;
     }
-    
+
     // Create muxer for output
     WebPMux* mux = WebPMuxNew();
     if (!mux) {
@@ -112,45 +138,69 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
         WebPDemuxDelete(demux);
         return NULL;
     }
-    
+
     WebPMuxAnimParams anim_params = {0};
     anim_params.loop_count = loop_count;
     WebPMuxSetAnimationParams(mux, &anim_params);
-    
+
     uint32_t output_width = 0, output_height = 0;
-    
+
     // Process each frame
     WebPIterator iter;
     if (WebPDemuxGetFrame(demux, 1, &iter)) {
         do {
-            // Decode frame
-            WebPDecoderConfig config;
-            if (!WebPInitDecoderConfig(&config)) {
-                set_error("Failed to init decoder config");
+            // Decode frame directly to WebPPicture
+            WebPPicture pic;
+            if (!WebPPictureInit(&pic)) {
+                set_error("Failed to init picture");
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);
                 WebPDemuxDelete(demux);
                 return NULL;
             }
-            
+
+            // Decode frame to RGBA
+            WebPDecoderConfig config;
+            if (!WebPInitDecoderConfig(&config)) {
+                set_error("Failed to init decoder config");
+                WebPPictureFree(&pic);
+                WebPDemuxReleaseIterator(&iter);
+                WebPMuxDelete(mux);
+                WebPDemuxDelete(demux);
+                return NULL;
+            }
+
             config.output.colorspace = MODE_RGBA;
             if (WebPDecode(iter.fragment.bytes, iter.fragment.size, &config) != VP8_STATUS_OK) {
                 set_error("Failed to decode WebP frame");
                 WebPFreeDecBuffer(&config.output);
+                WebPPictureFree(&pic);
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);
                 WebPDemuxDelete(demux);
                 return NULL;
             }
-            
-            uint8_t* rgba = config.output.u.RGBA.rgba;
-            uint32_t width = config.output.width;
-            uint32_t height = config.output.height;
-            
-            // Transform frame
-            RGBAImage transformed;
-            if (!transform(rgba, width, height, transform_params, &transformed)) {
+
+            // Import RGBA to WebPPicture
+            pic.width = config.output.width;
+            pic.height = config.output.height;
+            pic.use_argb = 1;
+
+            if (!WebPPictureImportRGBA(&pic, config.output.u.RGBA.rgba, config.output.width * 4)) {
+                set_error("Failed to import RGBA data");
                 WebPFreeDecBuffer(&config.output);
+                WebPPictureFree(&pic);
+                WebPDemuxReleaseIterator(&iter);
+                WebPMuxDelete(mux);
+                WebPDemuxDelete(demux);
+                return NULL;
+            }
+
+            WebPFreeDecBuffer(&config.output);
+
+            // Apply transformation directly to WebPPicture
+            if (!transform(&pic, transform_params)) {
+                WebPPictureFree(&pic);
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);
                 WebPDemuxDelete(demux);
@@ -159,12 +209,11 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
 
             // Set output dimensions from first frame
             if (output_width == 0) {
-                output_width = transformed.width;
-                output_height = transformed.height;
-            } else if (output_width != transformed.width || output_height != transformed.height) {
+                output_width = pic.width;
+                output_height = pic.height;
+            } else if (output_width != pic.width || output_height != pic.height) {
                 set_error("Transformed frames must have consistent dimensions");
-                free_rgba_image(&transformed);
-                WebPFreeDecBuffer(&config.output);
+                WebPPictureFree(&pic);
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);
                 WebPDemuxDelete(demux);
@@ -175,8 +224,7 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
             WebPConfig enc_config;
             if (!WebPConfigInit(&enc_config)) {
                 set_error("Failed to init encoder config");
-                free_rgba_image(&transformed);
-                WebPFreeDecBuffer(&config.output);
+                WebPPictureFree(&pic);
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);
                 WebPDemuxDelete(demux);
@@ -184,33 +232,7 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
             }
 
             enc_config.lossless = 0;
-            enc_config.quality = 90;
-
-            WebPPicture pic;
-            if (!WebPPictureInit(&pic)) {
-                set_error("Failed to init picture");
-                free_rgba_image(&transformed);
-                WebPFreeDecBuffer(&config.output);
-                WebPDemuxReleaseIterator(&iter);
-                WebPMuxDelete(mux);
-                WebPDemuxDelete(demux);
-                return NULL;
-            }
-
-            pic.width = transformed.width;
-            pic.height = transformed.height;
-            pic.use_argb = 1;
-
-            if (!WebPPictureImportRGBA(&pic, transformed.data, transformed.width * 4)) {
-                set_error("Failed to import RGBA data");
-                WebPPictureFree(&pic);
-                free_rgba_image(&transformed);
-                WebPFreeDecBuffer(&config.output);
-                WebPDemuxReleaseIterator(&iter);
-                WebPMuxDelete(mux);
-                WebPDemuxDelete(demux);
-                return NULL;
-            }
+            enc_config.quality = quality;
 
             WebPMemoryWriter writer;
             WebPMemoryWriterInit(&writer);
@@ -221,8 +243,6 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
                 set_error("Failed to encode frame");
                 WebPMemoryWriterClear(&writer);
                 WebPPictureFree(&pic);
-                free_rgba_image(&transformed);
-                WebPFreeDecBuffer(&config.output);
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);
                 WebPDemuxDelete(demux);
@@ -243,8 +263,6 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
                 set_error("Failed to add frame to mux");
                 WebPMemoryWriterClear(&writer);
                 WebPPictureFree(&pic);
-                free_rgba_image(&transformed);
-                WebPFreeDecBuffer(&config.output);
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);
                 WebPDemuxDelete(demux);
@@ -254,8 +272,6 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
             // Cleanup
             WebPMemoryWriterClear(&writer);
             WebPPictureFree(&pic);
-            free_rgba_image(&transformed);
-            WebPFreeDecBuffer(&config.output);
 
         } while (WebPDemuxNextFrame(&iter));
         WebPDemuxReleaseIterator(&iter);
@@ -289,39 +305,39 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Public API functions
+// Public API functions (with quality parameter)
 // ────────────────────────────────────────────────────────────────────────────
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* magic_webp_crop(const uint8_t* webp_data, size_t webp_size,
                          uint32_t x, uint32_t y, uint32_t width, uint32_t height,
-                         size_t* out_size) {
+                         float quality, size_t* out_size) {
     CropParams params = {x, y, width, height};
-    return process_webp_animation(webp_data, webp_size, transform_crop, &params, out_size);
+    return process_webp_animation(webp_data, webp_size, transform_crop, &params, quality, out_size);
 }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* magic_webp_resize(const uint8_t* webp_data, size_t webp_size,
                            uint32_t width, uint32_t height,
-                           size_t* out_size) {
+                           float quality, size_t* out_size) {
     ResizeParams params = {width, height};
-    return process_webp_animation(webp_data, webp_size, transform_resize, &params, out_size);
+    return process_webp_animation(webp_data, webp_size, transform_resize, &params, quality, out_size);
 }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* magic_webp_resize_fit(const uint8_t* webp_data, size_t webp_size,
                                uint32_t max_width, uint32_t max_height,
-                               size_t* out_size) {
+                               float quality, size_t* out_size) {
     ResizeFitParams params = {max_width, max_height};
-    return process_webp_animation(webp_data, webp_size, transform_resize_fit, &params, out_size);
+    return process_webp_animation(webp_data, webp_size, transform_resize_fit, &params, quality, out_size);
 }
 
 EMSCRIPTEN_KEEPALIVE
 uint8_t* magic_webp_resize_cover(const uint8_t* webp_data, size_t webp_size,
                                  uint32_t target_width, uint32_t target_height,
                                  uint32_t crop_x, uint32_t crop_y,
-                                 size_t* out_size) {
+                                 float quality, size_t* out_size) {
     ResizeAndCropParams params = {target_width, target_height, crop_x, crop_y};
-    return process_webp_animation(webp_data, webp_size, transform_resize_and_crop, &params, out_size);
+    return process_webp_animation(webp_data, webp_size, transform_resize_and_crop, &params, quality, out_size);
 }
 

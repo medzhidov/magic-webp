@@ -23,6 +23,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const uploadArea = document.getElementById("uploadArea") as HTMLDivElement;
 const fileInput = document.getElementById("fileInput") as HTMLInputElement;
+const qualitySlider = document.getElementById("qualitySlider") as HTMLInputElement;
+const qualityValue = document.getElementById("qualityValue") as HTMLSpanElement;
 const btnCropCenter = document.getElementById("btnCropCenter") as HTMLButtonElement;
 const btnResize400 = document.getElementById("btnResize400") as HTMLButtonElement;
 const btnResizeFit300 = document.getElementById("btnResizeFit300") as HTMLButtonElement;
@@ -42,6 +44,39 @@ let originalWidth = 0;
 let originalHeight = 0;
 let prevObjectURL = "";
 let isProcessing = false;
+let currentQuality = 90;
+
+// ── Quality slider ────────────────────────────────────────────────────────
+function updateQualityLabel(value: number) {
+  let label = "";
+  if (value === 100) {
+    label = "💎 Lossless";
+  } else if (value >= 90) {
+    label = "✨ High";
+  } else if (value >= 75) {
+    label = "⚖️ Balanced";
+  } else if (value >= 60) {
+    label = "📦 Compressed";
+  } else {
+    label = "🗜️ Max Compression";
+  }
+  qualityValue.textContent = `${value} (${label})`;
+  currentQuality = value;
+}
+
+qualitySlider.addEventListener('input', (e) => {
+  const value = parseInt((e.target as HTMLInputElement).value);
+  updateQualityLabel(value);
+});
+
+// Global function for preset buttons
+(window as any).setQuality = (value: number) => {
+  qualitySlider.value = value.toString();
+  updateQualityLabel(value);
+};
+
+// Initialize quality label
+updateQualityLabel(90);
 
 // ── Worker message handler ────────────────────────────────────────────────
 worker.onmessage = (e) => {
@@ -199,12 +234,13 @@ btnCropCenter.addEventListener("click", () => {
   const x = Math.max(0, Math.floor((originalWidth - 200) / 2));
   const y = Math.max(0, Math.floor((originalHeight - 200) / 2));
 
-  setStatus("Cropping center 200×200…");
+  setStatus(`Cropping center 200×200 (quality: ${currentQuality})…`);
   isProcessing = true;
 
   worker.postMessage({
     type: 'crop',
-    x, y, width: 200, height: 200
+    x, y, width: 200, height: 200,
+    quality: currentQuality
   });
 });
 
@@ -218,14 +254,15 @@ btnResize400.addEventListener("click", () => {
     return;
   }
 
-  setStatus("Resizing to 400×400 (cover mode)…");
+  setStatus(`Resizing to 400×400 cover (quality: ${currentQuality})…`);
   isProcessing = true;
 
   worker.postMessage({
     type: 'resize',
     width: 400,
     height: 400,
-    mode: 'cover'
+    mode: 'cover',
+    quality: currentQuality
   });
 });
 
@@ -239,14 +276,15 @@ btnResizeFit300.addEventListener("click", () => {
     return;
   }
 
-  setStatus("Resizing to fit 300×300 (contain mode)…");
+  setStatus(`Resizing to fit 300×300 contain (quality: ${currentQuality})…`);
   isProcessing = true;
 
   worker.postMessage({
     type: 'resize',
     width: 300,
     height: 300,
-    mode: 'contain'
+    mode: 'contain',
+    quality: currentQuality
   });
 });
 
@@ -266,12 +304,13 @@ btnCrop.addEventListener("click", () => {
   const w = parseInt((document.getElementById("cropW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("cropH") as HTMLInputElement).value);
 
-  setStatus("Cropping in background…");
+  setStatus(`Cropping (quality: ${currentQuality})…`);
   isProcessing = true;
 
   worker.postMessage({
     type: 'crop',
-    x, y, width: w, height: h
+    x, y, width: w, height: h,
+    quality: currentQuality
   });
 });
 
@@ -289,14 +328,15 @@ btnResize.addEventListener("click", () => {
   const w = parseInt((document.getElementById("resizeW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("resizeH") as HTMLInputElement).value);
 
-  setStatus("Resizing (cover mode) in background…");
+  setStatus(`Resizing cover (quality: ${currentQuality})…`);
   isProcessing = true;
 
   worker.postMessage({
     type: 'resize',
     width: w,
     height: h,
-    mode: 'cover'
+    mode: 'cover',
+    quality: currentQuality
   });
 });
 
@@ -314,14 +354,15 @@ btnResizeFit.addEventListener("click", () => {
   const w = parseInt((document.getElementById("resizeW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("resizeH") as HTMLInputElement).value);
 
-  setStatus("Resizing (contain mode) in background…");
+  setStatus(`Resizing contain (quality: ${currentQuality})…`);
   isProcessing = true;
 
   worker.postMessage({
     type: 'resize',
     width: w,
     height: h,
-    mode: 'contain'
+    mode: 'contain',
+    quality: currentQuality
   });
 });
 

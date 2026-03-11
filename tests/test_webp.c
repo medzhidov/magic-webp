@@ -3,16 +3,16 @@
 #include <string.h>
 #include <stdint.h>
 
-// Forward declarations from src-c
+// Forward declarations from src-c (with quality parameter)
 extern uint8_t* magic_webp_crop(const uint8_t* webp_data, size_t webp_size,
                                 uint32_t x, uint32_t y, uint32_t width, uint32_t height,
-                                size_t* out_size);
+                                float quality, size_t* out_size);
 extern uint8_t* magic_webp_resize(const uint8_t* webp_data, size_t webp_size,
                                   uint32_t width, uint32_t height,
-                                  size_t* out_size);
+                                  float quality, size_t* out_size);
 extern uint8_t* magic_webp_resize_fit(const uint8_t* webp_data, size_t webp_size,
                                       uint32_t max_width, uint32_t max_height,
-                                      size_t* out_size);
+                                      float quality, size_t* out_size);
 extern void magic_webp_free(void* ptr);
 extern const char* magic_webp_get_error(void);
 
@@ -54,57 +54,57 @@ static int write_file(const char* filename, const uint8_t* data, size_t size) {
 static void test_crop(const uint8_t* input, size_t input_size, const char* test_name,
                       uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
     printf("Testing %s...\n", test_name);
-    
+
     size_t out_size = 0;
-    uint8_t* result = magic_webp_crop(input, input_size, x, y, width, height, &out_size);
-    
+    uint8_t* result = magic_webp_crop(input, input_size, x, y, width, height, 90.0f, &out_size);
+
     if (!result) {
         fprintf(stderr, "  FAILED: %s\n", magic_webp_get_error());
         return;
     }
-    
+
     char filename[256];
     snprintf(filename, sizeof(filename), "test-output/%s.webp", test_name);
-    
+
     if (write_file(filename, result, out_size)) {
         printf("  OK: %s (%.2f KB)\n", filename, out_size / 1024.0);
     } else {
         printf("  FAILED: Could not write file\n");
     }
-    
+
     magic_webp_free(result);
 }
 
 static void test_resize(const uint8_t* input, size_t input_size, const char* test_name,
                         uint32_t width, uint32_t height) {
     printf("Testing %s...\n", test_name);
-    
+
     size_t out_size = 0;
-    uint8_t* result = magic_webp_resize(input, input_size, width, height, &out_size);
-    
+    uint8_t* result = magic_webp_resize(input, input_size, width, height, 90.0f, &out_size);
+
     if (!result) {
         fprintf(stderr, "  FAILED: %s\n", magic_webp_get_error());
         return;
     }
-    
+
     char filename[256];
     snprintf(filename, sizeof(filename), "test-output/%s.webp", test_name);
-    
+
     if (write_file(filename, result, out_size)) {
         printf("  OK: %s (%.2f KB)\n", filename, out_size / 1024.0);
     } else {
         printf("  FAILED: Could not write file\n");
     }
-    
+
     magic_webp_free(result);
 }
 
 static void test_resize_fit(const uint8_t* input, size_t input_size, const char* test_name,
                             uint32_t max_width, uint32_t max_height) {
     printf("Testing %s...\n", test_name);
-    
+
     size_t out_size = 0;
-    uint8_t* result = magic_webp_resize_fit(input, input_size, max_width, max_height, &out_size);
+    uint8_t* result = magic_webp_resize_fit(input, input_size, max_width, max_height, 90.0f, &out_size);
     
     if (!result) {
         fprintf(stderr, "  FAILED: %s\n", magic_webp_get_error());
@@ -128,27 +128,27 @@ static void test_chain(const uint8_t* input, size_t input_size) {
 
     // First crop center 100x100
     size_t crop_size = 0;
-    uint8_t* cropped = magic_webp_crop(input, input_size, 50, 50, 100, 100, &crop_size);
-    
+    uint8_t* cropped = magic_webp_crop(input, input_size, 50, 50, 100, 100, 90.0f, &crop_size);
+
     if (!cropped) {
         fprintf(stderr, "  FAILED at crop: %s\n", magic_webp_get_error());
         return;
     }
-    
+
     // Then resize fit to 128x128
     size_t fit_size = 0;
-    uint8_t* fitted = magic_webp_resize_fit(cropped, crop_size, 128, 128, &fit_size);
+    uint8_t* fitted = magic_webp_resize_fit(cropped, crop_size, 128, 128, 90.0f, &fit_size);
     magic_webp_free(cropped);
-    
+
     if (!fitted) {
         fprintf(stderr, "  FAILED at resize_fit: %s\n", magic_webp_get_error());
         return;
     }
-    
+
     if (write_file("test-output/chain_crop_center_then_fit_128.webp", fitted, fit_size)) {
         printf("  OK: test-output/chain_crop_center_then_fit_128.webp (%.2f KB)\n", fit_size / 1024.0);
     }
-    
+
     magic_webp_free(fitted);
 }
 
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
 
     // Get image dimensions by trying a small crop
     size_t test_size = 0;
-    uint8_t* test = magic_webp_crop(input, input_size, 0, 0, 1, 1, &test_size);
+    uint8_t* test = magic_webp_crop(input, input_size, 0, 0, 1, 1, 90.0f, &test_size);
     if (test) {
         magic_webp_free(test);
         printf("Image appears valid\n\n");
