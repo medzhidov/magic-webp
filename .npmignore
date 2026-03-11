@@ -1,0 +1,31 @@
+# Source files (not needed in npm package)
+src-c/
+src-js/
+demo/
+tests/
+scripts/
+
+# Build files
+build/
+test-output/
+emsdk/
+libwebp/
+node_modules/
+
+# Config files
+CMakeLists.txt
+tsconfig.json
+vitest.config.ts
+*.ps1
+.gitignore
+.npmignore
+
+# Documentation (keep only README and LICENSE)
+*.md
+!README.md
+
+# Development
+.vscode/
+.idea/
+*.log
+

@@ -1,8 +1,23 @@
 {
   "name": "magic-webp",
-  "version": "0.1.0",
-  "description": "Browser image crop & resize to WebP via WebAssembly",
+  "version": "0.2.0",
+  "description": "Fast WebP (static and animated) image processing in the browser using WebAssembly",
+  "keywords": ["webp", "image", "resize", "crop", "wasm", "webassembly", "animated", "browser", "animation"],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/magic-webp.git"
+  },
   "type": "module",
+  "main": "./pkg/magic_webp.mjs",
+  "types": "./pkg/magic_webp.d.ts",
+  "files": [
+    "pkg/*.mjs",
+    "pkg/*.wasm",
+    "pkg/*.d.ts",
+    "pkg/package.json"
+  ],
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build:wasm": "powershell -ExecutionPolicy Bypass -File build.ps1",
