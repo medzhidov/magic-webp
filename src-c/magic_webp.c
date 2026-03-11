@@ -119,17 +119,53 @@ int resize_fit_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
         set_error("Max dimensions must be greater than zero");
         return 0;
     }
-    
+
     float scale_w = (float)max_w / src_w;
     float scale_h = (float)max_h / src_h;
     float scale = (scale_w < scale_h) ? scale_w : scale_h;
-    
+
     uint32_t new_w = (uint32_t)(src_w * scale);
     uint32_t new_h = (uint32_t)(src_h * scale);
-    
+
     if (new_w == 0) new_w = 1;
     if (new_h == 0) new_h = 1;
-    
+
     return resize_rgba(src, src_w, src_h, new_w, new_h, out);
+}
+
+// Resize and crop in one pass (for cover mode optimization)
+// Resizes to cover target dimensions, then crops to exact size
+int resize_and_crop_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
+                         uint32_t target_w, uint32_t target_h,
+                         uint32_t crop_x, uint32_t crop_y,
+                         RGBAImage* out) {
+    if (target_w == 0 || target_h == 0) {
+        set_error("Target dimensions must be greater than zero");
+        return 0;
+    }
+
+    // Calculate scale to cover (scale by the larger ratio)
+    float scale_w = (float)target_w / src_w;
+    float scale_h = (float)target_h / src_h;
+    float scale = (scale_w > scale_h) ? scale_w : scale_h;
+
+    uint32_t scaled_w = (uint32_t)(src_w * scale);
+    uint32_t scaled_h = (uint32_t)(src_h * scale);
+
+    if (scaled_w == 0) scaled_w = 1;
+    if (scaled_h == 0) scaled_h = 1;
+
+    // First resize to cover
+    RGBAImage resized;
+    if (!resize_rgba(src, src_w, src_h, scaled_w, scaled_h, &resized)) {
+        return 0;
+    }
+
+    // Then crop to exact dimensions
+    int result = crop_rgba(resized.data, resized.width, resized.height,
+                          crop_x, crop_y, target_w, target_h, out);
+
+    free_rgba_image(&resized);
+    return result;
 }
 

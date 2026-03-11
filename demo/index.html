@@ -183,8 +183,8 @@
       <h3>⚡ Quick Actions</h3>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
         <button id="btnCropCenter" disabled>Crop Center 200×200</button>
-        <button id="btnResize400" disabled>Resize to 400×400</button>
-        <button id="btnResizeFit300" disabled>Resize Fit 300×300</button>
+        <button id="btnResize400" disabled>Cover 400×400</button>
+        <button id="btnResizeFit300" disabled>Contain 300×300</button>
       </div>
     </div>
 
@@ -214,7 +214,7 @@
         </div>
         <button id="btnCrop" disabled>Apply Crop</button>
 
-        <h4 style="margin: 15px 0 10px 0; color: #666; font-size: 13px;">📐 Resize</h4>
+        <h4 style="margin: 15px 0 10px 0; color: #666; font-size: 13px;">📐 Resize Modes</h4>
         <div class="input-row">
           <div>
             <label>Width</label>
@@ -225,8 +225,8 @@
             <input type="number" id="resizeH" value="400" min="1">
           </div>
         </div>
-        <button id="btnResize" disabled>Resize Exact</button>
-        <button id="btnResizeFit" disabled style="margin-top: 5px;">Resize Fit (Keep Aspect Ratio)</button>
+        <button id="btnResize" disabled>Cover (fill & crop)</button>
+        <button id="btnResizeFit" disabled style="margin-top: 5px;">Contain (fit inside)</button>
       </div>
     </details>
 

@@ -218,12 +218,14 @@ btnResize400.addEventListener("click", () => {
     return;
   }
 
-  setStatus("Resizing to 400×400…");
+  setStatus("Resizing to 400×400 (cover mode)…");
   isProcessing = true;
 
   worker.postMessage({
     type: 'resize',
-    width: 400, height: 400
+    width: 400,
+    height: 400,
+    mode: 'cover'
   });
 });
 
@@ -237,12 +239,14 @@ btnResizeFit300.addEventListener("click", () => {
     return;
   }
 
-  setStatus("Resizing fit 300×300…");
+  setStatus("Resizing to fit 300×300 (contain mode)…");
   isProcessing = true;
 
   worker.postMessage({
-    type: 'resizeFit',
-    maxWidth: 300, maxHeight: 300
+    type: 'resize',
+    width: 300,
+    height: 300,
+    mode: 'contain'
   });
 });
 
@@ -271,7 +275,7 @@ btnCrop.addEventListener("click", () => {
   });
 });
 
-// ── Resize exact ──────────────────────────────────────────────────────────
+// ── Resize (cover mode) ───────────────────────────────────────────────────
 btnResize.addEventListener("click", () => {
   if (!originalData) {
     setStatus("Load an image first.", "error");
@@ -285,16 +289,18 @@ btnResize.addEventListener("click", () => {
   const w = parseInt((document.getElementById("resizeW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("resizeH") as HTMLInputElement).value);
 
-  setStatus("Resizing in background…");
+  setStatus("Resizing (cover mode) in background…");
   isProcessing = true;
 
   worker.postMessage({
     type: 'resize',
-    width: w, height: h
+    width: w,
+    height: h,
+    mode: 'cover'
   });
 });
 
-// ── Resize fit ────────────────────────────────────────────────────────────
+// ── Resize (contain mode) ─────────────────────────────────────────────────
 btnResizeFit.addEventListener("click", () => {
   if (!originalData) {
     setStatus("Load an image first.", "error");
@@ -308,12 +314,14 @@ btnResizeFit.addEventListener("click", () => {
   const w = parseInt((document.getElementById("resizeW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("resizeH") as HTMLInputElement).value);
 
-  setStatus("Resizing (fit) in background…");
+  setStatus("Resizing (contain mode) in background…");
   isProcessing = true;
 
   worker.postMessage({
-    type: 'resizeFit',
-    maxWidth: w, maxHeight: h
+    type: 'resize',
+    width: w,
+    height: h,
+    mode: 'contain'
   });
 });
 

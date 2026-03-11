@@ -24,6 +24,10 @@ extern int resize_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
                        uint32_t dst_w, uint32_t dst_h, RGBAImage* out);
 extern int resize_fit_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
                            uint32_t max_w, uint32_t max_h, RGBAImage* out);
+extern int resize_and_crop_rgba(const uint8_t* src, uint32_t src_w, uint32_t src_h,
+                                uint32_t target_w, uint32_t target_h,
+                                uint32_t crop_x, uint32_t crop_y,
+                                RGBAImage* out);
 
 // ────────────────────────────────────────────────────────────────────────────
 // WebP animation processing
@@ -62,6 +66,20 @@ static int transform_resize_fit(const uint8_t* rgba, uint32_t width, uint32_t he
                                 void* params, RGBAImage* out) {
     ResizeFitParams* p = (ResizeFitParams*)params;
     return resize_fit_rgba(rgba, width, height, p->max_width, p->max_height, out);
+}
+
+// Resize and crop transform wrapper (for cover mode)
+typedef struct {
+    uint32_t target_width, target_height;
+    uint32_t crop_x, crop_y;
+} ResizeAndCropParams;
+
+static int transform_resize_and_crop(const uint8_t* rgba, uint32_t width, uint32_t height,
+                                     void* params, RGBAImage* out) {
+    ResizeAndCropParams* p = (ResizeAndCropParams*)params;
+    return resize_and_crop_rgba(rgba, width, height,
+                                p->target_width, p->target_height,
+                                p->crop_x, p->crop_y, out);
 }
 
 // Main animation processing function
@@ -296,5 +314,14 @@ uint8_t* magic_webp_resize_fit(const uint8_t* webp_data, size_t webp_size,
                                size_t* out_size) {
     ResizeFitParams params = {max_width, max_height};
     return process_webp_animation(webp_data, webp_size, transform_resize_fit, &params, out_size);
+}
+
+EMSCRIPTEN_KEEPALIVE
+uint8_t* magic_webp_resize_cover(const uint8_t* webp_data, size_t webp_size,
+                                 uint32_t target_width, uint32_t target_height,
+                                 uint32_t crop_x, uint32_t crop_y,
+                                 size_t* out_size) {
+    ResizeAndCropParams params = {target_width, target_height, crop_x, crop_y};
+    return process_webp_animation(webp_data, webp_size, transform_resize_and_crop, &params, out_size);
 }
 

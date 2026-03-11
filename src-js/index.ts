@@ -9,21 +9,30 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export interface CropOptions {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+/**
+ * Resize fit modes (inspired by CSS object-fit)
+ */
+export type FitMode =
+  | 'cover'    // Fill the dimensions, crop excess (default)
+  | 'contain'  // Fit within dimensions, preserve aspect ratio
+  | 'fill'     // Stretch to exact dimensions (may distort)
+  | 'inside'   // Like contain, but never enlarge
+  | 'outside'; // Like cover, but never reduce
 
+/**
+ * Position for cover/outside modes
+ */
+export type Position =
+  | 'center'
+  | 'top' | 'bottom' | 'left' | 'right'
+  | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+/**
+ * Options for resize operation
+ */
 export interface ResizeOptions {
-  width: number;
-  height: number;
-}
-
-export interface ResizeFitOptions {
-  maxWidth: number;
-  maxHeight: number;
+  mode?: FitMode;
+  position?: Position;
 }
 
 // ── Emscripten WASM types ─────────────────────────────────────────────────
@@ -52,6 +61,15 @@ interface EmscriptenModule {
     dataSize: number,
     maxWidth: number,
     maxHeight: number,
+    outSizePtr: number
+  ): number;
+  _magic_webp_resize_cover(
+    dataPtr: number,
+    dataSize: number,
+    targetWidth: number,
+    targetHeight: number,
+    cropX: number,
+    cropY: number,
     outSizePtr: number
   ): number;
   _magic_webp_free(ptr: number): void;
@@ -279,52 +297,167 @@ export class MagicWebp {
   }
 
   /**
-   * Resize the WebP image to exact dimensions.
-   * Operations are queued to ensure thread-safety.
+   * Resize the WebP image with various fit modes.
+   *
+   * @param width - Target width
+   * @param height - Target height
+   * @param options - Resize options
+   * @param options.mode - Fit mode: 'cover' (default), 'contain', 'fill', 'inside', 'outside'
+   * @param options.position - Position for 'cover'/'outside' modes (default: 'center')
+   *
+   * @example
+   * // Cover - fill 300x300, crop excess (center)
+   * await img.resize(300, 300, { mode: 'cover' })
+   *
+   * @example
+   * // Cover - fill 300x300, crop excess (top)
+   * await img.resize(300, 300, { mode: 'cover', position: 'top' })
+   *
+   * @example
+   * // Contain - fit within 300x300
+   * await img.resize(300, 300, { mode: 'contain' })
+   *
+   * @example
+   * // Fill - stretch to 300x300 (may distort)
+   * await img.resize(300, 300, { mode: 'fill' })
    */
-  async resize(width: number, height: number): Promise<MagicWebp> {
-    return enqueueOperation(() => {
-      const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
-        return wasmModule!._magic_webp_resize(
-          dataPtr,
-          dataSize,
-          width,
-          height,
-          outSizePtr
-        );
-      });
-      // Result dimensions are the target dimensions
-      return new MagicWebp(result, width, height);
+  async resize(width: number, height: number, options?: ResizeOptions): Promise<MagicWebp> {
+    const mode = options?.mode || 'cover';
+    const position = options?.position || 'center';
+
+    if (!this._width || !this._height) {
+      throw new Error('Image dimensions unknown');
+    }
+
+    return enqueueOperation(async () => {
+      switch (mode) {
+        case 'fill':
+          return this._resizeFill(width, height);
+
+        case 'contain':
+          return this._resizeContain(width, height);
+
+        case 'inside':
+          return this._resizeInside(width, height);
+
+        case 'outside':
+          return this._resizeOutside(width, height, position);
+
+        case 'cover':
+        default:
+          return this._resizeCover(width, height, position);
+      }
     });
   }
 
-  /**
-   * Resize the WebP image to fit within max dimensions (preserves aspect ratio).
-   * Operations are queued to ensure thread-safety.
-   */
-  async resizeFit(maxWidth: number, maxHeight: number): Promise<MagicWebp> {
-    return enqueueOperation(() => {
-      const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
-        return wasmModule!._magic_webp_resize_fit(
-          dataPtr,
-          dataSize,
-          maxWidth,
-          maxHeight,
-          outSizePtr
-        );
-      });
+  // ── Private resize implementations ────────────────────────────────────
 
-      // Calculate fitted dimensions (preserve aspect ratio)
-      if (this._width && this._height) {
-        const scale = Math.min(maxWidth / this._width, maxHeight / this._height);
-        const newWidth = Math.round(this._width * scale);
-        const newHeight = Math.round(this._height * scale);
-        return new MagicWebp(result, newWidth, newHeight);
-      }
-
-      // If we don't know original dimensions, return without dimensions
-      return new MagicWebp(result);
+  private _resizeFill(width: number, height: number): MagicWebp {
+    console.log(`[magic-webp] Resize fill: ${width}x${height}`);
+    const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
+      return wasmModule!._magic_webp_resize(dataPtr, dataSize, width, height, outSizePtr);
     });
+    return new MagicWebp(result, width, height);
+  }
+
+  private _resizeContain(width: number, height: number): MagicWebp {
+    console.log(`[magic-webp] Resize contain: ${width}x${height}`);
+    const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
+      return wasmModule!._magic_webp_resize_fit(dataPtr, dataSize, width, height, outSizePtr);
+    });
+
+    // Calculate actual dimensions
+    const scale = Math.min(width / this._width!, height / this._height!);
+    const newWidth = Math.round(this._width! * scale);
+    const newHeight = Math.round(this._height! * scale);
+    return new MagicWebp(result, newWidth, newHeight);
+  }
+
+  private _resizeInside(width: number, height: number): MagicWebp {
+    // Don't enlarge - if image is smaller, keep original size
+    if (this._width! <= width && this._height! <= height) {
+      console.log(`[magic-webp] Resize inside: keeping original ${this._width}x${this._height}`);
+      return new MagicWebp(this._data, this._width, this._height);
+    }
+
+    // Otherwise, same as contain
+    return this._resizeContain(width, height);
+  }
+
+  private _resizeOutside(width: number, height: number, position: Position): MagicWebp {
+    // Don't reduce - if image is larger, just crop
+    if (this._width! >= width && this._height! >= height) {
+      console.log(`[magic-webp] Resize outside: cropping ${this._width}x${this._height} to ${width}x${height}`);
+      const { x, y } = this._calculateCropPosition(this._width!, this._height!, width, height, position);
+      const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
+        return wasmModule!._magic_webp_crop(dataPtr, dataSize, x, y, width, height, outSizePtr);
+      });
+      return new MagicWebp(result, width, height);
+    }
+
+    // Otherwise, same as cover
+    return this._resizeCover(width, height, position);
+  }
+
+  private _resizeCover(width: number, height: number, position: Position): MagicWebp {
+    console.log(`[magic-webp] Resize cover: ${width}x${height}, position: ${position}`);
+
+    // Calculate scale to cover (scale by the larger ratio)
+    const scaleX = width / this._width!;
+    const scaleY = height / this._height!;
+    const scale = Math.max(scaleX, scaleY);
+
+    const scaledWidth = Math.round(this._width! * scale);
+    const scaledHeight = Math.round(this._height! * scale);
+
+    // Calculate crop position
+    const { x, y } = this._calculateCropPosition(scaledWidth, scaledHeight, width, height, position);
+
+    // Use optimized C function that does resize + crop in one pass
+    const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
+      return wasmModule!._magic_webp_resize_cover(
+        dataPtr,
+        dataSize,
+        width,
+        height,
+        x,
+        y,
+        outSizePtr
+      );
+    });
+
+    return new MagicWebp(result, width, height);
+  }
+
+  private _calculateCropPosition(
+    sourceWidth: number,
+    sourceHeight: number,
+    targetWidth: number,
+    targetHeight: number,
+    position: Position
+  ): { x: number; y: number } {
+    let x = 0;
+    let y = 0;
+
+    // Horizontal position
+    if (position.includes('left')) {
+      x = 0;
+    } else if (position.includes('right')) {
+      x = sourceWidth - targetWidth;
+    } else {
+      x = Math.round((sourceWidth - targetWidth) / 2);
+    }
+
+    // Vertical position
+    if (position.includes('top')) {
+      y = 0;
+    } else if (position.includes('bottom')) {
+      y = sourceHeight - targetHeight;
+    } else {
+      y = Math.round((sourceHeight - targetHeight) / 2);
+    }
+
+    return { x, y };
   }
 
   // ── Output ─────────────────────────────────────────────────────────────
@@ -358,36 +491,36 @@ export class MagicWebp {
 
 // ── Standalone functions ──────────────────────────────────────────────────
 
-export async function cropWebp(
+/**
+ * Crop a WebP image
+ */
+export async function crop(
   input: File | Blob | string,
-  options: CropOptions
+  x: number,
+  y: number,
+  width: number,
+  height: number
 ): Promise<Blob> {
   const img = typeof input === "string"
     ? await MagicWebp.fromUrl(input)
     : await MagicWebp.fromBlob(input);
-  const result = await img.crop(options.x, options.y, options.width, options.height);
+  const result = await img.crop(x, y, width, height);
   return result.toBlob();
 }
 
-export async function resizeWebp(
+/**
+ * Resize a WebP image with fit modes
+ */
+export async function resize(
   input: File | Blob | string,
-  options: ResizeOptions
+  width: number,
+  height: number,
+  options?: ResizeOptions
 ): Promise<Blob> {
   const img = typeof input === "string"
     ? await MagicWebp.fromUrl(input)
     : await MagicWebp.fromBlob(input);
-  const result = await img.resize(options.width, options.height);
-  return result.toBlob();
-}
-
-export async function resizeFitWebp(
-  input: File | Blob | string,
-  options: ResizeFitOptions
-): Promise<Blob> {
-  const img = typeof input === "string"
-    ? await MagicWebp.fromUrl(input)
-    : await MagicWebp.fromBlob(input);
-  const result = await img.resizeFit(options.maxWidth, options.maxHeight);
+  const result = await img.resize(width, height, options);
   return result.toBlob();
 }
 

@@ -23,15 +23,11 @@ interface ResizeMessage {
   type: 'resize';
   width: number;
   height: number;
+  mode?: 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
+  position?: string;
 }
 
-interface ResizeFitMessage {
-  type: 'resizeFit';
-  maxWidth: number;
-  maxHeight: number;
-}
-
-type WorkerMessage = LoadMessage | CropMessage | ResizeMessage | ResizeFitMessage;
+type WorkerMessage = LoadMessage | CropMessage | ResizeMessage;
 
 // State
 let original: MagicWebp | null = null;
@@ -80,34 +76,17 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
           throw new Error('No image loaded');
         }
 
-        console.log('[worker] Resizing:', msg.width, msg.height);
-        const result = await original.resize(msg.width, msg.height);
-        const blob = result.toBlob();
-        const arrayBuffer = await blob.arrayBuffer();
-
-        self.postMessage({
-          type: 'result',
-          operation: 'resize',
-          data: new Uint8Array(arrayBuffer),
-          width: result.width,
-          height: result.height
+        console.log('[worker] Resizing:', msg.width, msg.height, 'mode:', msg.mode || 'cover');
+        const result = await original.resize(msg.width, msg.height, {
+          mode: msg.mode,
+          position: msg.position as any
         });
-        break;
-      }
-
-      case 'resizeFit': {
-        if (!original) {
-          throw new Error('No image loaded');
-        }
-
-        console.log('[worker] Resize fit:', msg.maxWidth, msg.maxHeight);
-        const result = await original.resizeFit(msg.maxWidth, msg.maxHeight);
         const blob = result.toBlob();
         const arrayBuffer = await blob.arrayBuffer();
 
         self.postMessage({
           type: 'result',
-          operation: 'resizeFit',
+          operation: `resize-${msg.mode || 'cover'}`,
           data: new Uint8Array(arrayBuffer),
           width: result.width,
           height: result.height

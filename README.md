@@ -23,19 +23,24 @@ const img = await MagicWebp.fromFile(file);
 // Crop to 200x200 from top-left
 const cropped = await img.crop(0, 0, 200, 200);
 
-// Resize to exact dimensions
-const resized = await img.resize(400, 300);
+// Resize with different modes
+const cover = await img.resize(400, 400, { mode: 'cover' });     // Fill & crop
+const contain = await img.resize(400, 400, { mode: 'contain' }); // Fit inside
+const fill = await img.resize(400, 400, { mode: 'fill' });       // Stretch
 
-// Resize to fit within bounds (preserves aspect ratio)
-const fitted = await img.resizeFit(500, 500);
+// Cover with position
+const banner = await img.resize(1200, 400, {
+  mode: 'cover',
+  position: 'top'  // Crop from top
+});
 
 // Get result as Blob
-const blob = cropped.toBlob();
+const blob = cover.toBlob();
 
-// Or chain operations
+// Chain operations
 const result = await MagicWebp.fromUrl('animated.webp')
   .then(img => img.crop(10, 10, 300, 300))
-  .then(img => img.resizeFit(200, 200))
+  .then(img => img.resize(200, 200, { mode: 'contain' }))
   .then(img => img.toBlob());
 ```
 
@@ -105,24 +110,75 @@ magic-webp/
 
 #### Instance Methods
 
+**Transformations:**
 - `crop(x: number, y: number, width: number, height: number): Promise<MagicWebp>`
-- `resize(width: number, height: number): Promise<MagicWebp>`
-- `resizeFit(maxWidth: number, maxHeight: number): Promise<MagicWebp>`
+- `resize(width: number, height: number, options?: ResizeOptions): Promise<MagicWebp>`
+
+**Output:**
 - `toBlob(): Blob`
 - `toBytes(): Uint8Array`
 - `toDataUrl(): Promise<string>`
 - `toObjectUrl(): string`
 
-**Note:** All transformation methods (`crop`, `resize`, `resizeFit`) are now asynchronous and return `Promise<MagicWebp>`. Operations are automatically queued to ensure thread-safety.
+**Resize Options:**
+```typescript
+interface ResizeOptions {
+  mode?: 'cover' | 'contain' | 'fill' | 'inside' | 'outside';  // default: 'cover'
+  position?: 'center' | 'top' | 'bottom' | 'left' | 'right' |  // default: 'center'
+             'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+}
+```
+
+**Resize Modes (inspired by CSS object-fit):**
+- `cover` - Fill dimensions, crop excess (default)
+- `contain` - Fit inside dimensions, preserve aspect ratio
+- `fill` - Stretch to exact dimensions (may distort)
+- `inside` - Like contain, but never enlarge
+- `outside` - Like cover, but never reduce
+
+**Note:** All transformation methods are asynchronous and return `Promise<MagicWebp>`. Operations are automatically queued to ensure thread-safety.
 
 ### Standalone Functions
 
 ```typescript
-import { cropWebp, resizeWebp, resizeFitWebp } from 'magic-webp';
+import { crop, resize } from 'magic-webp';
 
-const blob = await cropWebp(file, { x: 0, y: 0, width: 200, height: 200 });
-const blob2 = await resizeWebp(file, { width: 400, height: 300 });
-const blob3 = await resizeFitWebp(file, { maxWidth: 500, maxHeight: 500 });
+// Crop
+const blob1 = await crop(file, 0, 0, 200, 200);
+
+// Resize with modes
+const blob2 = await resize(file, 400, 400, { mode: 'cover' });
+const blob3 = await resize(file, 400, 400, { mode: 'contain' });
+```
+
+### Real-World Examples
+
+```typescript
+// Avatar - square 200x200, centered
+const avatar = await img.resize(200, 200, { mode: 'cover' });
+
+// Avatar - square 200x200, face at top
+const avatar = await img.resize(200, 200, {
+  mode: 'cover',
+  position: 'top'
+});
+
+// Product preview - fit in 300x300
+const preview = await img.resize(300, 300, { mode: 'contain' });
+
+// Banner - 1200x400, top of image
+const banner = await img.resize(1200, 400, {
+  mode: 'cover',
+  position: 'top'
+});
+
+// Thumbnail - never enlarge small images
+const thumb = await img.resize(150, 150, { mode: 'inside' });
+
+// Crop specific area then resize
+const detail = await img
+  .crop(100, 100, 400, 400)
+  .then(cropped => cropped.resize(200, 200, { mode: 'contain' }));
 ```
 
 ## 🎯 Use Cases
@@ -139,15 +195,15 @@ All operations are automatically queued to prevent race conditions. You can safe
 
 ```typescript
 // These operations will be queued and executed sequentially
-const [cropped, resized, fitted] = await Promise.all([
+const [cropped, cover, contain] = await Promise.all([
   img.crop(0, 0, 100, 100),
-  img.resize(200, 200),
-  img.resizeFit(150, 150)
+  img.resize(200, 200, { mode: 'cover' }),
+  img.resize(150, 150, { mode: 'contain' })
 ]);
 
 // Process multiple images concurrently - also safe!
 const results = await Promise.all(
-  images.map(img => img.resize(100, 100))
+  images.map(img => img.resize(100, 100, { mode: 'cover' }))
 );
 ```
 
