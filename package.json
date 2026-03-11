@@ -1,13 +1,23 @@
 {
   "name": "magic-webp",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Fast WebP (static and animated) image processing in the browser using WebAssembly",
-  "keywords": ["webp", "image", "resize", "crop", "wasm", "webassembly", "animated", "browser", "animation"],
+  "keywords": [
+    "webp",
+    "image",
+    "resize",
+    "crop",
+    "wasm",
+    "webassembly",
+    "animated",
+    "browser",
+    "animation"
+  ],
   "author": "medzhidov",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/medzhidov/magic-webp.git"
+    "url": "git+https://github.com/medzhidov/magic-webp.git"
   },
   "type": "module",
   "main": "./pkg/magic_webp.mjs",
@@ -40,5 +50,12 @@
     "vite-plugin-top-level-await": "^1.4.4",
     "vite-plugin-wasm": "^3.3.0",
     "vitest": "^4.0.18"
-  }
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "bugs": {
+    "url": "https://github.com/medzhidov/magic-webp/issues"
+  },
+  "homepage": "https://github.com/medzhidov/magic-webp#readme"
 }
