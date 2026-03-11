@@ -1,6 +1,7 @@
 # Source files (not needed in npm package)
 src-c/
-src-js/
+src-js/*
+!src-js/worker.ts
 demo/
 tests/
 scripts/

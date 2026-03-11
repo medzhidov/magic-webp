@@ -1,6 +1,6 @@
 {
   "name": "magic-webp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Fast WebP (static and animated) image processing in the browser using WebAssembly",
   "keywords": ["webp", "image", "resize", "crop", "wasm", "webassembly", "animated", "browser", "animation"],
   "author": "medzhidov",
@@ -29,7 +29,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:native": "powershell -ExecutionPolicy Bypass -File test-native.ps1"
+    "test:native": "powershell -ExecutionPolicy Bypass -File test-native.ps1",
+    "prepublishOnly": "pnpm run build:wasm"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",
