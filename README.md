@@ -4,6 +4,7 @@
 
 **Fast WebP image processing in the browser using WebAssembly**
 
+[![npm version](https://img.shields.io/npm/v/magic-webp.svg)](https://www.npmjs.com/package/magic-webp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-libwebp-654FF0)](https://developers.google.com/speed/webp)
@@ -11,7 +12,7 @@
 Process WebP images (static and animated) directly in the browser with native performance.
 Built on top of Google's libwebp compiled to WebAssembly.
 
-[Features](#-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [API](#-api) • [Development](#-development)
+**[🎮 Live Demo](https://medzhidov.github.io/magic-webp/)** • [Features](#-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [API](#-api) • [Development](#-development)
 
 </div>
 
@@ -49,7 +50,7 @@ yarn add magic-webp
 cp node_modules/magic-webp/src-js/worker.ts public/worker.js
 
 # Or download from GitHub
-# https://github.com/yourusername/magic-webp/blob/master/src-js/worker.ts
+# https://github.com/medzhidov/magic-webp/blob/master/src-js/worker.ts
 ```
 
 **Step 2:** Use the simple API
@@ -136,7 +137,7 @@ import { MagicWebp } from 'magic-webp';
 
 const file = document.querySelector('input[type="file"]').files[0];
 const img = await MagicWebp.fromBlob(file);
-const resized = await img.resize(400, 400, { mode: 'cover', quality: 90 });
+const resized = await img.resize(400, 400, { mode: 'cover', quality: 75 });  // 75 = balanced
 const blob = resized.toBlob();
 ```
 
@@ -214,10 +215,10 @@ const inside = await img.resize(400, 400, { mode: 'inside' });
 const outside = await img.resize(400, 400, { mode: 'outside' });
 
 // With position (for cover/outside modes)
-const banner = await img.resize(1200, 400, { 
-  mode: 'cover', 
+const banner = await img.resize(1200, 400, {
+  mode: 'cover',
   position: 'top',  // 'center', 'top', 'bottom', 'left', 'right', etc.
-  quality: 90       // 0-100, default 90
+  quality: 75       // 0-100, default 75 (balanced - recommended)
 });
 ```
 
@@ -244,9 +245,18 @@ interface ResizeOptions {
   mode?: 'cover' | 'contain' | 'fill' | 'inside' | 'outside';  // default: 'cover'
   position?: 'center' | 'top' | 'bottom' | 'left' | 'right' |  // default: 'center'
              'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-  quality?: number;  // 0-100, default: 90
+  quality?: number;  // 0-100, default: 75 (balanced)
 }
 ```
+
+**💡 Quality Recommendations:**
+
+| Quality | File Size | Visual Quality | Use Case | Recommended For |
+|---------|-----------|----------------|----------|-----------------|
+| **60-70** | Smallest | Visible artifacts | Thumbnails, previews | Low priority images |
+| **75-85** | Medium | Good balance | **Most web images** | ✅ **Default (75)** |
+| **90-95** | Large | Excellent | Important photos | Hero images, portfolios |
+| **100** | Largest | Perfect (lossless) | Archival, editing | When quality is critical |
 
 ### Quality Recommendations
 
@@ -277,24 +287,24 @@ import { MagicWebpWorker } from 'magic-webp';
 const webp = new MagicWebpWorker('/worker.js');
 await webp.load(file);
 
-// Avatar - square 200x200, centered
-const avatar = await webp.resize(200, 200, { mode: 'cover', quality: 90 });
+// Avatar - square 200x200, centered (high quality for profile pics)
+const avatar = await webp.resize(200, 200, { mode: 'cover', quality: 85 });
 
-// Product preview - fit inside 300x300
-const preview = await webp.resize(300, 300, { mode: 'contain', quality: 85 });
+// Product preview - fit inside 300x300 (balanced quality)
+const preview = await webp.resize(300, 300, { mode: 'contain', quality: 75 });
 
-// Banner - 1200x400, crop from top
+// Banner - 1200x400, crop from top (high quality for hero images)
 const banner = await webp.resize(1200, 400, {
   mode: 'cover',
   position: 'top',
   quality: 90
 });
 
-// Thumbnail - never enlarge
-const thumb = await webp.resize(150, 150, { mode: 'inside', quality: 75 });
+// Thumbnail - never enlarge (lower quality for small images)
+const thumb = await webp.resize(150, 150, { mode: 'inside', quality: 65 });
 
-// Crop specific region
-const cropped = await webp.crop(50, 50, 200, 200, 90);
+// Crop specific region (balanced quality)
+const cropped = await webp.crop(50, 50, 200, 200, 75);
 
 webp.terminate();
 ```
