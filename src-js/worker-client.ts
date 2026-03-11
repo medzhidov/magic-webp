@@ -12,7 +12,6 @@ export interface ResizeOptions {
 }
 
 interface WorkerRequest {
-  id: number;
   type: string;
   [key: string]: any;
 }
@@ -99,7 +98,9 @@ export class MagicWebpWorker {
     return new Promise((resolve, reject) => {
       const id = this.requestId++;
       this.pendingRequests.set(id, { resolve, reject });
-      this.worker.postMessage({ ...message, id });
+      const fullMessage = { ...message, id };
+      console.log('[MagicWebpWorker] Sending message:', fullMessage.type, 'id:', fullMessage.id);
+      this.worker.postMessage(fullMessage);
     });
   }
 
@@ -111,10 +112,9 @@ export class MagicWebpWorker {
   async load(blob: Blob | File): Promise<{ width?: number; height?: number }> {
     const arrayBuffer = await blob.arrayBuffer();
     return this.sendMessage({
-      id: 0,
       type: 'load',
       data: new Uint8Array(arrayBuffer)
-    });
+    } as any);
   }
 
   /**
@@ -131,10 +131,9 @@ export class MagicWebpWorker {
       throw new Error('No image loaded. Call load() first.');
     }
     return this.sendMessage({
-      id: 0,
       type: 'crop',
       x, y, width, height, quality
-    });
+    } as any);
   }
 
   /**
@@ -149,14 +148,13 @@ export class MagicWebpWorker {
       throw new Error('No image loaded. Call load() first.');
     }
     return this.sendMessage({
-      id: 0,
       type: 'resize',
       width,
       height,
       mode: options?.mode,
       position: options?.position,
       quality: options?.quality
-    });
+    } as any);
   }
 
   /**

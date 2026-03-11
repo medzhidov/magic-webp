@@ -41,14 +41,17 @@ let processingQueue = Promise.resolve();
 // Process messages sequentially
 self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   const msg = e.data;
-  
+
+  console.log('[worker] Received message:', msg.type, 'id:', msg.id);
+
   processingQueue = processingQueue.then(async () => {
     try {
       switch (msg.type) {
         case 'load': {
-          console.log('[worker] Loading image:', msg.data.length, 'bytes');
+          console.log('[worker] Loading image, size:', msg.data.length);
           currentImage = await MagicWebp.fromBytes(msg.data);
-          
+
+          console.log('[worker] Image loaded:', currentImage.width, '×', currentImage.height, 'sending id:', msg.id);
           self.postMessage({
             type: 'loaded',
             id: msg.id,

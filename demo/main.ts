@@ -1,12 +1,15 @@
 /**
  * Demo page for magic-webp
- * Uses Web Worker for background processing to keep UI responsive
+ * Uses MagicWebpWorker API for background processing to keep UI responsive
  */
 
-// Create worker for background processing
-const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+import { MagicWebpWorker } from '../src-js/worker-client.js';
+import WorkerUrl from '../src-js/worker.ts?worker&url';
 
-console.log("[demo] Worker created");
+// Create worker using MagicWebpWorker API
+const webp = new MagicWebpWorker(WorkerUrl);
+
+console.log("[demo] MagicWebpWorker created");
 
 // Auto-load default image on page load
 window.addEventListener('DOMContentLoaded', async () => {
@@ -39,9 +42,7 @@ const statusContainer = document.getElementById("statusContainer") as HTMLDivEle
 const dlLink = document.getElementById("dlLink") as HTMLAnchorElement;
 
 // ── State ─────────────────────────────────────────────────────────────────
-let originalData: Uint8Array | null = null;  // Оригинальные данные WebP
-let originalWidth = 0;
-let originalHeight = 0;
+let isImageLoaded = false;
 let prevObjectURL = "";
 let isProcessing = false;
 let currentQuality = 90;
@@ -78,35 +79,6 @@ qualitySlider.addEventListener('input', (e) => {
 // Initialize quality label
 updateQualityLabel(90);
 
-// ── Worker message handler ────────────────────────────────────────────────
-worker.onmessage = (e) => {
-  const msg = e.data;
-
-  if (msg.type === 'loaded') {
-    originalWidth = msg.width;
-    originalHeight = msg.height;
-    const currentSize = origInfo.textContent || '';
-    origInfo.textContent = `${msg.width} × ${msg.height} px | ${currentSize}`;
-    setStatus(`✓ Image loaded: ${msg.width}×${msg.height} px`, "ok");
-    isProcessing = false;
-    enableButtons(true);
-  } else if (msg.type === 'result') {
-    showResult(msg.data, msg.width, msg.height, msg.operation);
-    isProcessing = false;
-  } else if (msg.type === 'error') {
-    setStatus(msg.message, "error");
-    isProcessing = false;
-    enableButtons(true);
-  }
-};
-
-worker.onerror = (error) => {
-  console.error('[demo] Worker error:', error);
-  setStatus('Worker error: ' + error.message, 'error');
-  isProcessing = false;
-  enableButtons(true);
-};
-
 // ── Helpers ───────────────────────────────────────────────────────────────
 function setStatus(msg: string, kind: "ok" | "error" | "" = "") {
   if (msg) {
@@ -129,22 +101,28 @@ function enableButtons(enabled: boolean) {
   btnResizeFit.disabled = !enabled;
 }
 
-function showResult(data: Uint8Array, width: number, height: number, operation: string) {
-  const blob = new Blob([data], { type: 'image/webp' });
-
+async function showResult(blob: Blob, operation: string) {
   // Revoke previous URL to avoid memory leaks
   if (prevObjectURL) URL.revokeObjectURL(prevObjectURL);
   prevObjectURL = URL.createObjectURL(blob);
 
   resultImg.src = prevObjectURL;
   resultImg.style.display = 'block';
-  resultInfo.textContent = `${width} × ${height} px | Size: ${kb(blob.size)}`;
+
+  // Get actual dimensions from the result image
+  await new Promise((resolve) => {
+    resultImg.onload = () => {
+      const width = resultImg.naturalWidth;
+      const height = resultImg.naturalHeight;
+      resultInfo.textContent = `${width} × ${height} px | Size: ${kb(blob.size)}`;
+      setStatus(`✓ ${operation} complete → ${width}×${height} px, ${kb(blob.size)}`, "ok");
+      resolve(null);
+    };
+  });
 
   dlLink.href = prevObjectURL;
   dlLink.download = `magic-webp-${operation}.webp`;
   dlLink.style.display = "inline-block";
-
-  setStatus(`✓ ${operation} complete → ${width}×${height} px, ${kb(blob.size)}`, "ok");
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────────────────
@@ -191,10 +169,6 @@ async function loadFile(file: File) {
   try {
     console.log("[demo] Loading file:", file.name);
 
-    // Read file as ArrayBuffer
-    const arrayBuffer = await file.arrayBuffer();
-    originalData = new Uint8Array(arrayBuffer);
-
     // Show original image
     origImg.src = URL.createObjectURL(file);
     origImg.style.display = 'block';
@@ -206,22 +180,28 @@ async function loadFile(file: File) {
     resultInfo.textContent = "";
     dlLink.style.display = "none";
 
-    // Send to worker for processing
-    worker.postMessage({
-      type: 'load',
-      data: originalData
-    });
+    // Load image using MagicWebpWorker
+    const { width, height } = await webp.load(file);
 
-  } catch (e) {
-    console.error("[demo] Error loading file:", e);
-    setStatus(String(e), "error");
+    // Update info with dimensions
+    origInfo.textContent = `${width} × ${height} px | Size: ${kb(file.size)}`;
+    setStatus(`✓ Image loaded: ${width}×${height} px`, "ok");
+
+    isImageLoaded = true;
     isProcessing = false;
+    enableButtons(true);
+
+  } catch (e: any) {
+    console.error("[demo] Error loading file:", e);
+    setStatus(e.message || String(e), "error");
+    isProcessing = false;
+    enableButtons(false);
   }
 }
 
 // ── Quick Actions ───────────────────────────────────────────────────────────
-btnCropCenter.addEventListener("click", () => {
-  if (!originalData || !originalWidth || !originalHeight) {
+btnCropCenter.addEventListener("click", async () => {
+  if (!isImageLoaded) {
     setStatus("Load an image first.", "error");
     return;
   }
@@ -231,21 +211,26 @@ btnCropCenter.addEventListener("click", () => {
   }
 
   // Crop 200x200 from center
-  const x = Math.max(0, Math.floor((originalWidth - 200) / 2));
-  const y = Math.max(0, Math.floor((originalHeight - 200) / 2));
+  const width = webp.width || 0;
+  const height = webp.height || 0;
+  const x = Math.max(0, Math.floor((width - 200) / 2));
+  const y = Math.max(0, Math.floor((height - 200) / 2));
 
   setStatus(`Cropping center 200×200 (quality: ${currentQuality})…`);
   isProcessing = true;
 
-  worker.postMessage({
-    type: 'crop',
-    x, y, width: 200, height: 200,
-    quality: currentQuality
-  });
+  try {
+    const blob = await webp.crop(x, y, 200, 200, currentQuality);
+    await showResult(blob, 'crop-center');
+  } catch (e: any) {
+    setStatus(e.message || String(e), "error");
+  } finally {
+    isProcessing = false;
+  }
 });
 
-btnResize400.addEventListener("click", () => {
-  if (!originalData) {
+btnResize400.addEventListener("click", async () => {
+  if (!isImageLoaded) {
     setStatus("Load an image first.", "error");
     return;
   }
@@ -257,17 +242,18 @@ btnResize400.addEventListener("click", () => {
   setStatus(`Resizing to 400×400 cover (quality: ${currentQuality})…`);
   isProcessing = true;
 
-  worker.postMessage({
-    type: 'resize',
-    width: 400,
-    height: 400,
-    mode: 'cover',
-    quality: currentQuality
-  });
+  try {
+    const blob = await webp.resize(400, 400, { mode: 'cover', quality: currentQuality });
+    await showResult(blob, 'resize-cover-400');
+  } catch (e: any) {
+    setStatus(e.message || String(e), "error");
+  } finally {
+    isProcessing = false;
+  }
 });
 
-btnResizeFit300.addEventListener("click", () => {
-  if (!originalData) {
+btnResizeFit300.addEventListener("click", async () => {
+  if (!isImageLoaded) {
     setStatus("Load an image first.", "error");
     return;
   }
@@ -279,18 +265,19 @@ btnResizeFit300.addEventListener("click", () => {
   setStatus(`Resizing to fit 300×300 contain (quality: ${currentQuality})…`);
   isProcessing = true;
 
-  worker.postMessage({
-    type: 'resize',
-    width: 300,
-    height: 300,
-    mode: 'contain',
-    quality: currentQuality
-  });
+  try {
+    const blob = await webp.resize(300, 300, { mode: 'contain', quality: currentQuality });
+    await showResult(blob, 'resize-contain-300');
+  } catch (e: any) {
+    setStatus(e.message || String(e), "error");
+  } finally {
+    isProcessing = false;
+  }
 });
 
 // ── Advanced Crop ──────────────────────────────────────────────────────────
-btnCrop.addEventListener("click", () => {
-  if (!originalData) {
+btnCrop.addEventListener("click", async () => {
+  if (!isImageLoaded) {
     setStatus("Load an image first.", "error");
     return;
   }
@@ -307,16 +294,19 @@ btnCrop.addEventListener("click", () => {
   setStatus(`Cropping (quality: ${currentQuality})…`);
   isProcessing = true;
 
-  worker.postMessage({
-    type: 'crop',
-    x, y, width: w, height: h,
-    quality: currentQuality
-  });
+  try {
+    const blob = await webp.crop(x, y, w, h, currentQuality);
+    await showResult(blob, 'crop');
+  } catch (e: any) {
+    setStatus(e.message || String(e), "error");
+  } finally {
+    isProcessing = false;
+  }
 });
 
 // ── Resize (cover mode) ───────────────────────────────────────────────────
-btnResize.addEventListener("click", () => {
-  if (!originalData) {
+btnResize.addEventListener("click", async () => {
+  if (!isImageLoaded) {
     setStatus("Load an image first.", "error");
     return;
   }
@@ -331,18 +321,19 @@ btnResize.addEventListener("click", () => {
   setStatus(`Resizing cover (quality: ${currentQuality})…`);
   isProcessing = true;
 
-  worker.postMessage({
-    type: 'resize',
-    width: w,
-    height: h,
-    mode: 'cover',
-    quality: currentQuality
-  });
+  try {
+    const blob = await webp.resize(w, h, { mode: 'cover', quality: currentQuality });
+    await showResult(blob, 'resize-cover');
+  } catch (e: any) {
+    setStatus(e.message || String(e), "error");
+  } finally {
+    isProcessing = false;
+  }
 });
 
 // ── Resize (contain mode) ─────────────────────────────────────────────────
-btnResizeFit.addEventListener("click", () => {
-  if (!originalData) {
+btnResizeFit.addEventListener("click", async () => {
+  if (!isImageLoaded) {
     setStatus("Load an image first.", "error");
     return;
   }
@@ -357,13 +348,14 @@ btnResizeFit.addEventListener("click", () => {
   setStatus(`Resizing contain (quality: ${currentQuality})…`);
   isProcessing = true;
 
-  worker.postMessage({
-    type: 'resize',
-    width: w,
-    height: h,
-    mode: 'contain',
-    quality: currentQuality
-  });
+  try {
+    const blob = await webp.resize(w, h, { mode: 'contain', quality: currentQuality });
+    await showResult(blob, 'resize-contain');
+  } catch (e: any) {
+    setStatus(e.message || String(e), "error");
+  } finally {
+    isProcessing = false;
+  }
 });
 
 

@@ -269,6 +269,15 @@ export class MagicWebp {
     return new MagicWebp(data, width, height);
   }
 
+  static async fromBytes(data: Uint8Array): Promise<MagicWebp> {
+    await ensureWasm();
+
+    // Get dimensions
+    const { width, height } = await getWebPDimensions(data);
+
+    return new MagicWebp(data, width, height);
+  }
+
   static async fromUrl(url: string): Promise<MagicWebp> {
     const response = await fetch(url);
     const blob = await response.blob();
@@ -536,6 +545,4 @@ export async function resize(
 
 // ── Exports ───────────────────────────────────────────────────────────────
 
-export { MagicWebp };
 export { MagicWebpWorker } from './worker-client.js';
-export type { FitMode, Position, ResizeOptions };
