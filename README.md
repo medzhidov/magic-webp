@@ -358,6 +358,29 @@ const webp = new MagicWebpWorker('/worker.js');
 webp.terminate();
 ```
 
+### Debug Mode
+
+By default, magic-webp runs silently in production (no console logs). Enable debug mode for development:
+
+```typescript
+import { setDebugMode } from 'magic-webp';
+
+// Enable debug logging (disabled by default)
+setDebugMode(true);
+
+// Now you'll see detailed logs:
+// [magic-webp] Loading Emscripten WASM module...
+// [magic-webp] WASM module ready
+// [magic-webp] Processing 45678 bytes
+// [magic-webp] Cropping: 0,0 200x200, quality: 75
+// etc.
+
+// Disable debug mode
+setDebugMode(false);
+```
+
+**💡 Tip:** Enable debug mode only during development. In production, logs are automatically disabled for better performance and cleaner console.
+
 ### Error Handling
 
 ```typescript
