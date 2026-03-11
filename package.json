@@ -1,6 +1,6 @@
 {
   "name": "magic-webp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Fast WebP (static and animated) image processing in the browser using WebAssembly",
   "keywords": ["webp", "image", "resize", "crop", "wasm", "webassembly", "animated", "browser", "animation"],
   "author": "medzhidov",

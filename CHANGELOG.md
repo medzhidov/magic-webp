@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-03-11
+
+### Added
+- **Debug mode** - `setDebugMode(true/false)` to control logging (disabled by default in production)
+- TypeScript type declarations for Vite worker imports and WASM modules
+- Proper error logging (errors always logged, debug logs optional)
+
+### Changed
+- **Production-ready logging** - All `console.log` replaced with debug logger (silent by default)
+- Demo now explicitly imports assets for proper bundling
+- Improved TypeScript type safety with proper EmscriptenModule interface
+
+### Fixed
+- TypeScript compilation errors in GitHub Actions
+- Missing `_magic_webp_resize_cover` export in CMakeLists.txt
+- Vite worker build errors (IIFE format not supported for code-splitting)
+- GitHub Pages deployment - `giphy.webp` now properly bundled
+- ArrayBuffer type compatibility issues with Blob constructor
+- Null safety checks for WASM module initialization
+
+### Documentation
+- Added "Debug Mode" section in README with usage examples
+- Explained when to enable/disable debug logging
+
 ## [1.0.1] - 2026-03-11
 
 ### Added
