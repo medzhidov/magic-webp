@@ -1,0 +1,28 @@
+{
+  "name": "magic-webp",
+  "version": "0.1.0",
+  "description": "Browser image crop & resize to WebP via WebAssembly",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build:wasm": "scripts\\wasm-pack.cmd build --target bundler --out-dir pkg",
+    "build:wasm:dev": "scripts\\wasm-pack.cmd build --dev --target bundler --out-dir pkg",
+    "demo": "pnpm run build:wasm:dev && pnpm run demo:watch",
+    "demo:watch": "vite demo",
+    "demo:build": "pnpm run build:wasm && vite build demo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check": "scripts\\cargo.cmd check",
+    "test:rust": "scripts\\cargo.cmd test"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
+    "happy-dom": "^20.8.3",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0",
+    "vite-plugin-top-level-await": "^1.4.4",
+    "vite-plugin-wasm": "^3.3.0",
+    "vitest": "^4.0.18"
+  }
+}
