@@ -144,21 +144,33 @@ interface ResizeOptions {
 - **90-95**: High quality, minimal artifacts (for important images)
 - **100**: Lossless, largest file size (perfect quality preservation)
 
+### Supported Formats
+
+**Input:**
+- ✅ Static WebP
+- ✅ Animated WebP (multi-frame)
+
+**Output:**
+- ✅ Static WebP (from static input)
+- ✅ Animated WebP (from animated input, preserves all frames and timing)
+
+**Note:** All operations (crop, resize) work on both static and animated WebP. For animated images, each frame is processed individually while preserving animation metadata (timing, loop count, etc.).
+
 ## 💡 Examples
 
-### Avatar (square, centered)
+### Static WebP - Avatar (square, centered)
 
 ```typescript
 const avatar = await img.resize(200, 200, { mode: 'cover', quality: 90 });
 ```
 
-### Product Preview (fit inside container)
+### Static WebP - Product Preview (fit inside container)
 
 ```typescript
 const preview = await img.resize(300, 300, { mode: 'contain', quality: 85 });
 ```
 
-### Banner (crop from top)
+### Static WebP - Banner (crop from top)
 
 ```typescript
 const banner = await img.resize(1200, 400, {
@@ -168,10 +180,20 @@ const banner = await img.resize(1200, 400, {
 });
 ```
 
-### Thumbnail (never enlarge small images)
+### Animated WebP - Thumbnail (preserves all frames)
 
 ```typescript
+// Works with animated WebP - all frames are processed
 const thumb = await img.resize(150, 150, { mode: 'inside', quality: 75 });
+```
+
+### Animated WebP - Sticker (crop and resize)
+
+```typescript
+// Crop animated sticker and resize - animation is preserved
+const sticker = await img
+  .crop(10, 10, 200, 200)
+  .then(cropped => cropped.resize(128, 128, { mode: 'cover' }));
 ```
 
 ### Chaining Operations
