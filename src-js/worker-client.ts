@@ -123,10 +123,10 @@ export class MagicWebpWorker {
    * @param y - Y coordinate of crop region
    * @param width - Width of crop region
    * @param height - Height of crop region
-   * @param quality - Output quality (0-100, default 90)
+   * @param quality - Output quality (0-100, default 75 - balanced)
    * @returns Promise with result Blob
    */
-  async crop(x: number, y: number, width: number, height: number, quality: number = 90): Promise<Blob> {
+  async crop(x: number, y: number, width: number, height: number, quality: number = 75): Promise<Blob> {
     if (!this.isLoaded) {
       throw new Error('No image loaded. Call load() first.');
     }

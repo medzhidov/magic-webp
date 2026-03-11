@@ -45,7 +45,7 @@ const dlLink = document.getElementById("dlLink") as HTMLAnchorElement;
 let isImageLoaded = false;
 let prevObjectURL = "";
 let isProcessing = false;
-let currentQuality = 90;
+let currentQuality = 75;
 
 // ── Quality slider ────────────────────────────────────────────────────────
 function updateQualityLabel(value: number) {
@@ -77,7 +77,7 @@ qualitySlider.addEventListener('input', (e) => {
 };
 
 // Initialize quality label
-updateQualityLabel(90);
+updateQualityLabel(75);
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function setStatus(msg: string, kind: "ok" | "error" | "" = "") {

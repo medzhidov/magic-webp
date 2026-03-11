@@ -290,9 +290,9 @@ export class MagicWebp {
    * Crop the WebP image to the specified region.
    * Operations are queued to ensure thread-safety.
    *
-   * @param quality - Output quality (0-100, default 90)
+   * @param quality - Output quality (0-100, default 75 - balanced)
    */
-  async crop(x: number, y: number, width: number, height: number, quality: number = 90): Promise<MagicWebp> {
+  async crop(x: number, y: number, width: number, height: number, quality: number = 75): Promise<MagicWebp> {
     return enqueueOperation(() => {
       console.log(`[magic-webp] Cropping: ${x},${y} ${width}x${height}, quality: ${quality}`);
       const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
@@ -341,7 +341,7 @@ export class MagicWebp {
   async resize(width: number, height: number, options?: ResizeOptions): Promise<MagicWebp> {
     const mode = options?.mode || 'cover';
     const position = options?.position || 'center';
-    const quality = options?.quality !== undefined ? options.quality : 90;
+    const quality = options?.quality !== undefined ? options.quality : 75;
 
     if (!this._width || !this._height) {
       throw new Error('Image dimensions unknown');

@@ -65,7 +65,7 @@ const file = document.querySelector('input[type="file"]').files[0];
 await webp.load(file);
 
 // Resize (returns Blob directly!)
-const blob = await webp.resize(400, 400, { mode: 'cover', quality: 90 });
+const blob = await webp.resize(400, 400, { mode: 'cover', quality: 75 });  // 75 = balanced (recommended)
 
 // Use the result
 const url = URL.createObjectURL(blob);
