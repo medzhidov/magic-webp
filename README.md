@@ -40,6 +40,8 @@ yarn add magic-webp
 
 ## 🚀 Quick Start
 
+### Basic Usage (Main Thread)
+
 ```typescript
 import { MagicWebp } from 'magic-webp';
 
@@ -56,6 +58,8 @@ const blob = resized.toBlob();
 // Download or display
 const url = URL.createObjectURL(blob);
 ```
+
+> **💡 Tip:** For production apps, use a [Web Worker](#using-web-worker-recommended-for-production) to keep the UI responsive during processing.
 
 ## 📖 API
 
@@ -214,6 +218,56 @@ const [avatar, thumb, banner] = await Promise.all([
   img.resize(1200, 400, { mode: 'cover', position: 'top' })
 ]);
 ```
+
+### Using Web Worker (recommended for production)
+
+For better performance and non-blocking UI, use a Web Worker:
+
+**worker.js:**
+```typescript
+import { MagicWebp } from 'magic-webp';
+
+self.onmessage = async (e) => {
+  const { data, width, height, mode, quality } = e.data;
+
+  try {
+    const img = await MagicWebp.fromBytes(data);
+    const result = await img.resize(width, height, { mode, quality });
+    const output = result.toBytes();
+
+    self.postMessage({ success: true, data: output });
+  } catch (error) {
+    self.postMessage({ success: false, error: error.message });
+  }
+};
+```
+
+**main.js:**
+```typescript
+const worker = new Worker('worker.js', { type: 'module' });
+
+worker.onmessage = (e) => {
+  if (e.data.success) {
+    const blob = new Blob([e.data.data], { type: 'image/webp' });
+    // Use the result
+  }
+};
+
+// Send data to worker
+const arrayBuffer = await file.arrayBuffer();
+worker.postMessage({
+  data: new Uint8Array(arrayBuffer),
+  width: 400,
+  height: 400,
+  mode: 'cover',
+  quality: 90
+});
+```
+
+**Benefits:**
+- ✅ Non-blocking UI
+- ✅ Better performance for large images
+- ✅ Parallel processing of multiple images
 
 ## 🛠️ Development
 
