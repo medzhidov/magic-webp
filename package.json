@@ -1,6 +1,6 @@
 {
   "name": "magic-webp",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Fast WebP (static and animated) image processing in the browser using WebAssembly",
   "keywords": [
     "webp",

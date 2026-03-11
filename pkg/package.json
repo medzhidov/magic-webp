@@ -1,0 +1,19 @@
+{
+  "name": "magic-webp",
+  "type": "module",
+  "description": "Browser image processing (crop & resize) via WebAssembly",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "magic_webp_bg.wasm",
+    "magic_webp.js",
+    "magic_webp_bg.js",
+    "magic_webp.d.ts"
+  ],
+  "main": "magic_webp.js",
+  "types": "magic_webp.d.ts",
+  "sideEffects": [
+    "./magic_webp.js",
+    "./snippets/*"
+  ]
+}

@@ -1,9 +1,5 @@
 # Build output
 build/
-pkg/*.wasm
-pkg/*.js
-pkg/*.mjs
-pkg/*.d.ts
 dist/
 demo/dist/
 
