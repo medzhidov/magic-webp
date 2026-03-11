@@ -16,7 +16,8 @@
     "pkg/*.mjs",
     "pkg/*.wasm",
     "pkg/*.d.ts",
-    "pkg/package.json"
+    "pkg/package.json",
+    "src-js/worker.ts"
   ],
   "packageManager": "pnpm@9.15.0",
   "scripts": {

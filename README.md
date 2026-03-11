@@ -40,40 +40,147 @@ yarn add magic-webp
 
 ## 🚀 Quick Start
 
-### Basic Usage (Main Thread)
+### Recommended: Using Web Worker (Non-blocking UI)
+
+**Step 1:** Copy `worker.js` to your public folder
+
+```bash
+# Copy from node_modules
+cp node_modules/magic-webp/src-js/worker.ts public/worker.js
+
+# Or download from GitHub
+# https://github.com/yourusername/magic-webp/blob/master/src-js/worker.ts
+```
+
+**Step 2:** Use the simple API
+
+```typescript
+import { MagicWebpWorker } from 'magic-webp';
+
+// Initialize worker
+const webp = new MagicWebpWorker('/worker.js');
+
+// Load image
+const file = document.querySelector('input[type="file"]').files[0];
+await webp.load(file);
+
+// Resize (returns Blob directly!)
+const blob = await webp.resize(400, 400, { mode: 'cover', quality: 90 });
+
+// Use the result
+const url = URL.createObjectURL(blob);
+document.querySelector('img').src = url;
+
+// Clean up when done
+webp.terminate();
+```
+
+**That's it!** No manual Worker management, no message passing, just simple async calls.
+
+> **✨ Benefits:** Non-blocking UI, better performance, automatic request queuing
+
+### ⚠️ Important: Web Worker Requirements
+
+**1. Same-Origin Policy**
+- Worker file **must be served from the same domain** as your app
+- ❌ Won't work: `new MagicWebpWorker('https://cdn.example.com/worker.js')`
+- ✅ Works: `new MagicWebpWorker('/worker.js')` (same domain)
+
+**2. Module Type**
+- Worker must be loaded as ES module (`type: 'module'`)
+- Already handled by `MagicWebpWorker` constructor
+
+**3. CORS Headers (if serving from different path)**
+- If worker is on subdomain, ensure proper CORS headers:
+  ```
+  Access-Control-Allow-Origin: *
+  ```
+
+**4. File Serving**
+- Worker file must be accessible via HTTP/HTTPS
+- ❌ Won't work with `file://` protocol (local files)
+- ✅ Use local dev server: `npx serve` or `python -m http.server`
+
+**5. Build Tools**
+- **Vite**: Worker is automatically bundled
+  ```typescript
+  const webp = new MagicWebpWorker(
+    new URL('./worker.ts', import.meta.url).href
+  );
+  ```
+- **Webpack**: Use `worker-loader` or native Worker support
+- **Create React App**: Place worker in `public/` folder
+
+**Common Issues:**
+```typescript
+// ❌ WRONG: Cross-origin
+const webp = new MagicWebpWorker('https://cdn.com/worker.js');
+// Error: Failed to construct 'Worker': Script at '...' cannot be accessed from origin '...'
+
+// ✅ CORRECT: Same origin
+const webp = new MagicWebpWorker('/worker.js');
+
+// ✅ CORRECT: Relative path
+const webp = new MagicWebpWorker('./worker.js');
+
+// ✅ CORRECT: Vite/Webpack (bundled)
+const webp = new MagicWebpWorker(
+  new URL('./worker.ts', import.meta.url).href
+);
+```
+
+### Alternative: Main Thread (Simpler, but blocks UI)
 
 ```typescript
 import { MagicWebp } from 'magic-webp';
 
-// Load a WebP image (static or animated)
 const file = document.querySelector('input[type="file"]').files[0];
 const img = await MagicWebp.fromBlob(file);
-
-// Resize to 400x400 (cover mode - fills dimensions, crops excess)
 const resized = await img.resize(400, 400, { mode: 'cover', quality: 90 });
-
-// Get result as Blob
 const blob = resized.toBlob();
-
-// Download or display
-const url = URL.createObjectURL(blob);
 ```
 
-> **💡 Tip:** For production apps, use a [Web Worker](#using-web-worker-recommended-for-production) to keep the UI responsive during processing.
+> **⚠️ Note:** Main thread usage blocks the UI during processing. Use `MagicWebpWorker` for production apps.
 
 ## 📖 API
 
-### Loading Images
+### MagicWebpWorker (Recommended)
 
 ```typescript
-// From File/Blob
+import { MagicWebpWorker } from 'magic-webp';
+
+// Initialize
+const webp = new MagicWebpWorker('/worker.js');
+
+// Load image
+await webp.load(file);  // File or Blob
+
+// Get dimensions
+console.log(webp.width, webp.height);
+
+// Crop
+const blob = await webp.crop(x, y, width, height, quality);
+
+// Resize
+const blob = await webp.resize(width, height, { mode, position, quality });
+
+// Clean up
+webp.terminate();
+```
+
+### MagicWebp (Main Thread)
+
+```typescript
+import { MagicWebp } from 'magic-webp';
+
+// Load from File/Blob
 const img = await MagicWebp.fromBlob(blob);
 const img = await MagicWebp.fromFile(file);
 
-// From URL
+// Load from URL
 const img = await MagicWebp.fromUrl('https://example.com/image.webp');
 
-// From Uint8Array
+// Load from Uint8Array
 const img = await MagicWebp.fromBytes(uint8Array);
 ```
 
@@ -162,56 +269,49 @@ interface ResizeOptions {
 
 ## 💡 Examples
 
-### Static WebP - Avatar (square, centered)
+### With Worker (Recommended)
 
 ```typescript
-const avatar = await img.resize(200, 200, { mode: 'cover', quality: 90 });
-```
+import { MagicWebpWorker } from 'magic-webp';
 
-### Static WebP - Product Preview (fit inside container)
+const webp = new MagicWebpWorker('/worker.js');
+await webp.load(file);
 
-```typescript
-const preview = await img.resize(300, 300, { mode: 'contain', quality: 85 });
-```
+// Avatar - square 200x200, centered
+const avatar = await webp.resize(200, 200, { mode: 'cover', quality: 90 });
 
-### Static WebP - Banner (crop from top)
+// Product preview - fit inside 300x300
+const preview = await webp.resize(300, 300, { mode: 'contain', quality: 85 });
 
-```typescript
-const banner = await img.resize(1200, 400, {
+// Banner - 1200x400, crop from top
+const banner = await webp.resize(1200, 400, {
   mode: 'cover',
   position: 'top',
   quality: 90
 });
+
+// Thumbnail - never enlarge
+const thumb = await webp.resize(150, 150, { mode: 'inside', quality: 75 });
+
+// Crop specific region
+const cropped = await webp.crop(50, 50, 200, 200, 90);
+
+webp.terminate();
 ```
 
-### Animated WebP - Thumbnail (preserves all frames)
+### With Main Thread
 
 ```typescript
-// Works with animated WebP - all frames are processed
-const thumb = await img.resize(150, 150, { mode: 'inside', quality: 75 });
-```
+import { MagicWebp } from 'magic-webp';
 
-### Animated WebP - Sticker (crop and resize)
+const img = await MagicWebp.fromBlob(file);
 
-```typescript
-// Crop animated sticker and resize - animation is preserved
-const sticker = await img
-  .crop(10, 10, 200, 200)
-  .then(cropped => cropped.resize(128, 128, { mode: 'cover' }));
-```
-
-### Chaining Operations
-
-```typescript
+// Chaining operations
 const result = await img
   .crop(100, 100, 400, 400)
   .then(cropped => cropped.resize(200, 200, { mode: 'contain' }));
-```
 
-### Concurrent Processing (thread-safe)
-
-```typescript
-// All operations are automatically queued
+// Concurrent processing (automatically queued)
 const [avatar, thumb, banner] = await Promise.all([
   img.resize(200, 200, { mode: 'cover' }),
   img.resize(150, 150, { mode: 'inside' }),
@@ -219,55 +319,93 @@ const [avatar, thumb, banner] = await Promise.all([
 ]);
 ```
 
-### Using Web Worker (recommended for production)
+### Animated WebP
 
-For better performance and non-blocking UI, use a Web Worker:
-
-**worker.js:**
 ```typescript
-import { MagicWebp } from 'magic-webp';
+// Works with both static and animated WebP
+// For animated images, all frames are processed while preserving timing
 
-self.onmessage = async (e) => {
-  const { data, width, height, mode, quality } = e.data;
+const webp = new MagicWebpWorker('/worker.js');
+await webp.load(animatedWebpFile);
 
-  try {
-    const img = await MagicWebp.fromBytes(data);
-    const result = await img.resize(width, height, { mode, quality });
-    const output = result.toBytes();
-
-    self.postMessage({ success: true, data: output });
-  } catch (error) {
-    self.postMessage({ success: false, error: error.message });
-  }
-};
+// All frames will be resized
+const resized = await webp.resize(400, 400, { mode: 'cover' });
 ```
 
-**main.js:**
+
+
+## 🔧 Advanced Usage
+
+### Memory Management
+
 ```typescript
-const worker = new Worker('worker.js', { type: 'module' });
+// Worker automatically manages memory, but you should terminate when done
+const webp = new MagicWebpWorker('/worker.js');
 
-worker.onmessage = (e) => {
-  if (e.data.success) {
-    const blob = new Blob([e.data.data], { type: 'image/webp' });
-    // Use the result
-  }
-};
+// ... use worker ...
 
-// Send data to worker
-const arrayBuffer = await file.arrayBuffer();
-worker.postMessage({
-  data: new Uint8Array(arrayBuffer),
-  width: 400,
-  height: 400,
-  mode: 'cover',
-  quality: 90
-});
+// Clean up when component unmounts or app closes
+webp.terminate();
 ```
 
-**Benefits:**
-- ✅ Non-blocking UI
-- ✅ Better performance for large images
-- ✅ Parallel processing of multiple images
+### Error Handling
+
+```typescript
+const webp = new MagicWebpWorker('/worker.js');
+
+try {
+  await webp.load(file);
+  const blob = await webp.resize(400, 400, { mode: 'cover' });
+} catch (error) {
+  console.error('Processing failed:', error);
+  // Handle error (show message to user, retry, etc.)
+}
+```
+
+### Multiple Workers (Parallel Processing)
+
+```typescript
+// Create multiple workers for parallel processing
+const workers = [
+  new MagicWebpWorker('/worker.js'),
+  new MagicWebpWorker('/worker.js'),
+  new MagicWebpWorker('/worker.js')
+];
+
+// Process multiple images in parallel
+const results = await Promise.all(
+  files.map((file, i) => {
+    const worker = workers[i % workers.length];
+    return worker.load(file).then(() =>
+      worker.resize(400, 400, { mode: 'cover' })
+    );
+  })
+);
+
+// Clean up
+workers.forEach(w => w.terminate());
+```
+
+### Browser Compatibility
+
+- ✅ Chrome 80+
+- ✅ Firefox 79+
+- ✅ Safari 14+
+- ✅ Edge 80+
+- ❌ IE 11 (no WebAssembly support)
+
+**Check before using:**
+```typescript
+if (typeof WebAssembly === 'undefined') {
+  console.error('WebAssembly not supported');
+  // Fallback to server-side processing
+}
+
+if (typeof Worker === 'undefined') {
+  console.warn('Web Workers not supported, using main thread');
+  // Use MagicWebp instead of MagicWebpWorker
+}
+```
 
 ## 🛠️ Development
 
@@ -347,6 +485,41 @@ pnpm demo:build
 - **SIMD optimizations** (SSE2, NEON) for resize operations
 - **Optimized cover mode** - single pass resize+crop (2x faster)
 - **Minimal memory** - in-place operations where possible
+
+## 📋 Quick Reference
+
+### Resize Modes
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `cover` | Fills dimensions, crops excess | Avatars, thumbnails |
+| `contain` | Fits inside, preserves aspect | Product images, previews |
+| `fill` | Stretches to exact size | Backgrounds (may distort) |
+| `inside` | Like contain, never enlarges | Thumbnails of small images |
+| `outside` | Like cover, never reduces | Cropping large images |
+
+### Position Options (for cover/outside)
+
+| Position | Description |
+|----------|-------------|
+| `center` | Center of image (default) |
+| `top` | Top center |
+| `bottom` | Bottom center |
+| `left` | Left center |
+| `right` | Right center |
+| `top-left` | Top left corner |
+| `top-right` | Top right corner |
+| `bottom-left` | Bottom left corner |
+| `bottom-right` | Bottom right corner |
+
+### Quality Guidelines
+
+| Quality | File Size | Visual Quality | Use Case |
+|---------|-----------|----------------|----------|
+| 60-70 | Smallest | Visible artifacts | Thumbnails, previews |
+| 75-85 | Medium | Good balance | Most web images |
+| 90-95 | Large | Excellent | Important images, photos |
+| 100 | Largest | Perfect (lossless) | Archival, editing |
 
 ## 📄 License
 

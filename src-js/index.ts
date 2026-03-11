@@ -534,3 +534,8 @@ export async function resize(
   return result.toBlob();
 }
 
+// ── Exports ───────────────────────────────────────────────────────────────
+
+export { MagicWebp };
+export { MagicWebpWorker } from './worker-client.js';
+export type { FitMode, Position, ResizeOptions };
