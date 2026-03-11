@@ -1,10 +1,10 @@
 /**
- * magic-webp — TypeScript wrapper around the WASM image processing core.
+ * magic-webp — TypeScript wrapper around Emscripten WASM for animated WebP processing.
  *
  * Data flow:
- *   File/Blob/URL → ImageBitmap → Canvas → RGBA pixels
- *   → WASM (crop / resize) → RGBA pixels
- *   → Canvas → canvas.toBlob('image/webp') → Blob / DataURL / ObjectURL
+ *   File/Blob/URL → raw WebP bytes
+ *   → WASM (crop / resize / resize_fit on animated WebP)
+ *   → processed WebP bytes → Blob
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -26,101 +26,170 @@ export interface ResizeFitOptions {
   maxHeight: number;
 }
 
-// ── WASM types ────────────────────────────────────────────────────────────
+// ── Emscripten WASM types ─────────────────────────────────────────────────
 
-/** Mirrors the ProcessResult struct exposed by wasm-bindgen. */
-export interface WasmResult {
-  data(): Uint8Array;
-  width(): number;
-  height(): number;
-}
-
-/** The subset of the compiled WASM module that MagicWebp needs. */
-export interface WasmOps {
-  crop(
-    data: Uint8Array,
-    imgW: number, imgH: number,
-    x: number, y: number,
-    cropW: number, cropH: number
-  ): WasmResult;
-  resize(
-    data: Uint8Array,
-    imgW: number, imgH: number,
-    newW: number, newH: number
-  ): WasmResult;
-  resize_fit(
-    data: Uint8Array,
-    imgW: number, imgH: number,
-    maxW: number, maxH: number
-  ): WasmResult;
+interface EmscriptenModule {
+  _malloc(size: number): number;
+  _free(ptr: number): void;
+  _magic_webp_crop(
+    dataPtr: number,
+    dataSize: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    outSizePtr: number
+  ): number;
+  _magic_webp_resize(
+    dataPtr: number,
+    dataSize: number,
+    width: number,
+    height: number,
+    outSizePtr: number
+  ): number;
+  _magic_webp_resize_fit(
+    dataPtr: number,
+    dataSize: number,
+    maxWidth: number,
+    maxHeight: number,
+    outSizePtr: number
+  ): number;
+  _magic_webp_free(ptr: number): void;
+  _magic_webp_get_error(): number;
+  UTF8ToString(ptr: number): string;
+  getValue(ptr: number, type: string): number;
+  setValue(ptr: number, value: number, type: string): void;
+  writeArrayToMemory(array: Uint8Array, buffer: number): void;
 }
 
 // ── WASM module (lazy-loaded once) ────────────────────────────────────────
 
 let wasmReady = false;
-let wasmModule: WasmOps | null = null;
-
-/**
- * For unit tests only — inject a mock WasmOps implementation so the
- * real .wasm file is never loaded during tests.
- */
-export function _setWasmModule(mock: WasmOps): void {
-  wasmModule = mock;
-  wasmReady = true;
-}
+let wasmModule: EmscriptenModule | null = null;
 
 async function ensureWasm(): Promise<void> {
   if (wasmReady) return;
-  // bundler target: the module self-initialises on import (no default() call needed).
-  // vite-plugin-wasm + top-level-await handle the .wasm streaming internally.
-  wasmModule = await import("../pkg/magic_webp.js") as unknown as WasmOps;
+
+  console.log("[magic-webp] Loading Emscripten WASM module...");
+
+  // Import the Emscripten module factory
+  const createModule = (await import("../pkg/magic_webp.mjs")).default;
+  wasmModule = await createModule() as any;
+
+  console.log("[magic-webp] Module loaded, checking properties...");
+  console.log("[magic-webp] Module keys:", Object.keys(wasmModule).slice(0, 20));
+  console.log("[magic-webp] Has HEAPU8:", !!wasmModule.HEAPU8);
+  console.log("[magic-webp] HEAPU8 type:", typeof wasmModule.HEAPU8);
+  console.log("[magic-webp] Has _malloc:", !!wasmModule._malloc);
+  console.log("[magic-webp] Has _magic_webp_crop:", !!wasmModule._magic_webp_crop);
+
   wasmReady = true;
+  console.log("[magic-webp] WASM module ready");
 }
 
-// ── Pixel helpers ─────────────────────────────────────────────────────────
+// ── Helper functions ──────────────────────────────────────────────────────
 
-function imageBitmapToRgba(
-  bitmap: ImageBitmap
-): { data: Uint8ClampedArray; width: number; height: number } {
-  const { width, height } = bitmap;
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(bitmap, 0, 0);
-  const imageData = ctx.getImageData(0, 0, width, height);
-  return { data: imageData.data, width, height };
+function getLastError(): string {
+  if (!wasmModule) return "WASM module not initialized";
+  const errorPtr = wasmModule._magic_webp_get_error();
+  return wasmModule.UTF8ToString(errorPtr);
 }
 
-function rgbaToBlob(
-  data: Uint8Array,
-  width: number,
-  height: number,
-  quality = 0.92
-): Promise<Blob> {
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext("2d")!;
-  const imageData = new ImageData(new Uint8ClampedArray(data), width, height);
-  ctx.putImageData(imageData, 0, 0);
-  return canvas.convertToBlob({ type: "image/webp", quality });
+async function getWebPDimensions(webpData: Uint8Array): Promise<{ width: number; height: number }> {
+  // Create a blob and use createImageBitmap to get dimensions
+  const blob = new Blob([webpData], { type: 'image/webp' });
+  const bitmap = await createImageBitmap(blob);
+  const dimensions = { width: bitmap.width, height: bitmap.height };
+  bitmap.close();
+  return dimensions;
+}
+
+function processWebP(
+  webpData: Uint8Array,
+  operation: (dataPtr: number, dataSize: number, outSizePtr: number) => number
+): Uint8Array {
+  if (!wasmModule) throw new Error("WASM module not initialized");
+
+  console.log(`[magic-webp] Processing ${webpData.length} bytes`);
+
+  // Allocate input buffer
+  const dataPtr = wasmModule._malloc(webpData.length);
+  if (!dataPtr) throw new Error("Failed to allocate memory for input");
+
+  console.log(`[magic-webp] Allocated input at ${dataPtr}`);
+
+  // Copy input data to WASM heap using Emscripten API
+  wasmModule.writeArrayToMemory(webpData, dataPtr);
+
+  console.log(`[magic-webp] Copied input data`);
+
+  // Allocate output size pointer (4 bytes for size_t)
+  const outSizePtr = wasmModule._malloc(4);
+  if (!outSizePtr) {
+    wasmModule._free(dataPtr);
+    throw new Error("Failed to allocate memory for output size");
+  }
+
+  console.log(`[magic-webp] Allocated output size ptr at ${outSizePtr}`);
+
+  try {
+    // Call the operation
+    const resultPtr = operation(dataPtr, webpData.length, outSizePtr);
+
+    console.log(`[magic-webp] Operation returned ptr: ${resultPtr}`);
+
+    if (!resultPtr) {
+      const error = getLastError();
+      throw new Error(`WebP processing failed: ${error}`);
+    }
+
+    // Read output size using getValue
+    const outSize = wasmModule.getValue(outSizePtr, 'i32');
+
+    console.log(`[magic-webp] Output size: ${outSize} bytes`);
+
+    if (!outSize || outSize <= 0) {
+      throw new Error(`Invalid output size: ${outSize}`);
+    }
+
+    // Read result data
+    const result = new Uint8Array(outSize);
+    for (let i = 0; i < outSize; i++) {
+      result[i] = wasmModule.getValue(resultPtr + i, 'i8');
+    }
+
+    console.log(`[magic-webp] Copied result`);
+
+    // Free result
+    wasmModule._magic_webp_free(resultPtr);
+
+    return result;
+  } finally {
+    wasmModule._free(dataPtr);
+    wasmModule._free(outSizePtr);
+  }
 }
 
 // ── MagicWebp class ───────────────────────────────────────────────────────
 
 export class MagicWebp {
   private _data: Uint8Array;
-  private _width: number;
-  private _height: number;
+  private _width: number | null = null;
+  private _height: number | null = null;
 
-  private constructor(data: Uint8Array, width: number, height: number) {
+  private constructor(data: Uint8Array, width?: number, height?: number) {
     this._data = data;
-    this._width = width;
-    this._height = height;
+    if (width !== undefined && height !== undefined) {
+      this._width = width;
+      this._height = height;
+    }
   }
 
-  get width(): number {
+  get width(): number | null {
     return this._width;
   }
 
-  get height(): number {
+  get height(): number | null {
     return this._height;
   }
 
@@ -132,10 +201,13 @@ export class MagicWebp {
 
   static async fromBlob(blob: Blob): Promise<MagicWebp> {
     await ensureWasm();
-    const bitmap = await createImageBitmap(blob);
-    const { data, width, height } = imageBitmapToRgba(bitmap);
-    bitmap.close();
-    return new MagicWebp(new Uint8Array(data.buffer), width, height);
+    const arrayBuffer = await blob.arrayBuffer();
+    const data = new Uint8Array(arrayBuffer);
+
+    // Get dimensions
+    const { width, height } = await getWebPDimensions(data);
+
+    return new MagicWebp(data, width, height);
   }
 
   static async fromUrl(url: string): Promise<MagicWebp> {
@@ -147,71 +219,75 @@ export class MagicWebp {
   // ── Operations (chainable, each returns a new MagicWebp) ──────────────
 
   crop(x: number, y: number, width: number, height: number): MagicWebp {
-    const result = wasmModule.crop(
-      this._data,
-      this._width,
-      this._height,
-      x,
-      y,
-      width,
-      height
-    );
-    return new MagicWebp(
-      new Uint8Array(result.data()),
-      result.width(),
-      result.height()
-    );
+    console.log(`[magic-webp] Cropping: ${x},${y} ${width}x${height}`);
+    const result = processWebP(this._data, (dataPtr, dataSize, outSizePtr) => {
+      return wasmModule!._magic_webp_crop(
+        dataPtr,
+        dataSize,
+        x,
+        y,
+        width,
+        height,
+        outSizePtr
+      );
+    });
+    console.log(`[magic-webp] Crop result: ${result.length} bytes`);
+    // Result dimensions are the crop dimensions
+    return new MagicWebp(result, width, height);
   }
 
   resize(width: number, height: number): MagicWebp {
-    const result = wasmModule.resize(
-      this._data,
-      this._width,
-      this._height,
-      width,
-      height
-    );
-    return new MagicWebp(
-      new Uint8Array(result.data()),
-      result.width(),
-      result.height()
-    );
+    const result = processWebP(this._data, (dataPtr, dataSize, outSizePtr) => {
+      return wasmModule!._magic_webp_resize(
+        dataPtr,
+        dataSize,
+        width,
+        height,
+        outSizePtr
+      );
+    });
+    // Result dimensions are the target dimensions
+    return new MagicWebp(result, width, height);
   }
 
   resizeFit(maxWidth: number, maxHeight: number): MagicWebp {
-    const result = wasmModule.resize_fit(
-      this._data,
-      this._width,
-      this._height,
-      maxWidth,
-      maxHeight
-    );
-    return new MagicWebp(
-      new Uint8Array(result.data()),
-      result.width(),
-      result.height()
-    );
+    const result = processWebP(this._data, (dataPtr, dataSize, outSizePtr) => {
+      return wasmModule!._magic_webp_resize_fit(
+        dataPtr,
+        dataSize,
+        maxWidth,
+        maxHeight,
+        outSizePtr
+      );
+    });
+
+    // Calculate fitted dimensions (preserve aspect ratio)
+    if (this._width && this._height) {
+      const scale = Math.min(maxWidth / this._width, maxHeight / this._height);
+      const newWidth = Math.round(this._width * scale);
+      const newHeight = Math.round(this._height * scale);
+      return new MagicWebp(result, newWidth, newHeight);
+    }
+
+    // If we don't know original dimensions, return without dimensions
+    return new MagicWebp(result);
   }
 
   // ── Output ─────────────────────────────────────────────────────────────
 
-  /** Raw RGBA pixels of the current state. */
-  toImageData(): ImageData {
-    return new ImageData(
-      new Uint8ClampedArray(this._data.buffer),
-      this._width,
-      this._height
-    );
+  /** Get raw WebP bytes. */
+  toBytes(): Uint8Array {
+    return this._data.slice();
   }
 
-  /** WebP Blob. quality 0–1 (default 0.92). */
-  toBlob(quality = 0.92): Promise<Blob> {
-    return rgbaToBlob(this._data, this._width, this._height, quality);
+  /** WebP Blob. */
+  toBlob(): Blob {
+    return new Blob([this._data], { type: "image/webp" });
   }
 
-  /** WebP as a data: URL string. */
-  async toDataURL(quality = 0.92): Promise<string> {
-    const blob = await this.toBlob(quality);
+  /** Data URL (base64-encoded WebP). */
+  async toDataUrl(): Promise<string> {
+    const blob = this.toBlob();
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -220,10 +296,41 @@ export class MagicWebp {
     });
   }
 
-  /** WebP as a blob: URL (remember to call URL.revokeObjectURL when done). */
-  async toObjectURL(quality = 0.92): Promise<string> {
-    const blob = await this.toBlob(quality);
-    return URL.createObjectURL(blob);
+  /** Object URL (revokable). */
+  toObjectUrl(): string {
+    return URL.createObjectURL(this.toBlob());
   }
+}
+
+// ── Standalone functions ──────────────────────────────────────────────────
+
+export async function cropWebp(
+  input: File | Blob | string,
+  options: CropOptions
+): Promise<Blob> {
+  const img = typeof input === "string"
+    ? await MagicWebp.fromUrl(input)
+    : await MagicWebp.fromBlob(input);
+  return img.crop(options.x, options.y, options.width, options.height).toBlob();
+}
+
+export async function resizeWebp(
+  input: File | Blob | string,
+  options: ResizeOptions
+): Promise<Blob> {
+  const img = typeof input === "string"
+    ? await MagicWebp.fromUrl(input)
+    : await MagicWebp.fromBlob(input);
+  return img.resize(options.width, options.height).toBlob();
+}
+
+export async function resizeFitWebp(
+  input: File | Blob | string,
+  options: ResizeFitOptions
+): Promise<Blob> {
+  const img = typeof input === "string"
+    ? await MagicWebp.fromUrl(input)
+    : await MagicWebp.fromBlob(input);
+  return img.resizeFit(options.maxWidth, options.maxHeight).toBlob();
 }
 

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Dimensions</title>
+</head>
+<body>
+  <h1>Test Dimensions</h1>
+  <div id="output"></div>
+
+  <script type="module">
+    import { MagicWebp } from '../src-js/index.ts';
+
+    const output = document.getElementById('output');
+
+    async function test() {
+      try {
+        output.innerHTML = '<p>Loading giphy.webp...</p>';
+        
+        const response = await fetch('giphy.webp');
+        const blob = await response.blob();
+        
+        output.innerHTML += '<p>Creating MagicWebp...</p>';
+        const img = await MagicWebp.fromBlob(blob);
+        
+        output.innerHTML += `<p>✅ Loaded! Dimensions: ${img.width} × ${img.height}</p>`;
+        
+        // Test crop
+        const cropped = img.crop(0, 0, 100, 100);
+        output.innerHTML += `<p>✅ Cropped: ${cropped.width} × ${cropped.height}</p>`;
+        
+        // Test resize
+        const resized = img.resize(200, 200);
+        output.innerHTML += `<p>✅ Resized: ${resized.width} × ${resized.height}</p>`;
+        
+        // Test resize fit
+        const fitted = img.resizeFit(300, 300);
+        output.innerHTML += `<p>✅ Resize Fit: ${fitted.width} × ${fitted.height}</p>`;
+        
+      } catch (error) {
+        output.innerHTML += `<p style="color: red">❌ Error: ${error.message}</p>`;
+        console.error(error);
+      }
+    }
+
+    test();
+  </script>
+</body>
+</html>
+

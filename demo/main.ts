@@ -1,5 +1,7 @@
 import { MagicWebp } from "../src-js/index.js";
 
+console.log("[demo] MagicWebp imported successfully");
+
 // ── DOM refs ──────────────────────────────────────────────────────────────
 const fileInput   = document.getElementById("fileInput")   as HTMLInputElement;
 const btnCrop     = document.getElementById("btnCrop")     as HTMLButtonElement;
@@ -15,7 +17,8 @@ const qualitySlider = document.getElementById("quality")   as HTMLInputElement;
 const qualityVal  = document.getElementById("qualityVal")  as HTMLSpanElement;
 
 // ── State ─────────────────────────────────────────────────────────────────
-let current: MagicWebp | null = null;
+let original: MagicWebp | null = null;  // Оригинальное изображение (не меняется)
+let current: MagicWebp | null = null;   // Текущий результат (для re-encode)
 let prevObjectURL = "";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -53,42 +56,49 @@ fileInput.addEventListener("change", async () => {
 
   setStatus("Loading…");
   try {
-    current = await MagicWebp.fromFile(file);
+    console.log("[demo] Loading file:", file.name);
+    original = await MagicWebp.fromFile(file);
+    current = null; // Сбрасываем текущий результат
+    console.log("[demo] MagicWebp loaded:", original.width, "×", original.height);
     origImg.src = URL.createObjectURL(file);
-    origInfo.textContent = `${current.width} × ${current.height} px — ${kb(file.size)}`;
+    origInfo.textContent = `${original.width} × ${original.height} px — ${kb(file.size)}`;
     resultImg.src = "";
     resultInfo.textContent = "—";
     dlLink.style.display = "none";
-    setStatus(`Image loaded: ${current.width}×${current.height} px`, "ok");
+    setStatus(`Image loaded: ${original.width}×${original.height} px`, "ok");
   } catch (e) {
+    console.error("[demo] Error loading file:", e);
     setStatus(String(e), "error");
   }
 });
 
 // ── Crop ──────────────────────────────────────────────────────────────────
 btnCrop.addEventListener("click", async () => {
-  if (!current) { setStatus("Load an image first.", "error"); return; }
+  if (!original) { setStatus("Load an image first.", "error"); return; }
   const x = parseInt((document.getElementById("cropX") as HTMLInputElement).value);
   const y = parseInt((document.getElementById("cropY") as HTMLInputElement).value);
   const w = parseInt((document.getElementById("cropW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("cropH") as HTMLInputElement).value);
   setStatus("Cropping…");
   try {
-    const result = current.crop(x, y, w, h);
+    console.log("[demo] Cropping:", { x, y, w, h });
+    const result = original.crop(x, y, w, h);
+    console.log("[demo] Crop result:", result.width, "×", result.height);
     await showResult(result, "Crop");
   } catch (e) {
+    console.error("[demo] Crop error:", e);
     setStatus(String(e), "error");
   }
 });
 
 // ── Resize exact ──────────────────────────────────────────────────────────
 btnResize.addEventListener("click", async () => {
-  if (!current) { setStatus("Load an image first.", "error"); return; }
+  if (!original) { setStatus("Load an image first.", "error"); return; }
   const w = parseInt((document.getElementById("resizeW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("resizeH") as HTMLInputElement).value);
   setStatus("Resizing…");
   try {
-    const result = current.resize(w, h);
+    const result = original.resize(w, h);
     await showResult(result, "Resize");
   } catch (e) {
     setStatus(String(e), "error");
@@ -97,12 +107,12 @@ btnResize.addEventListener("click", async () => {
 
 // ── Resize fit ────────────────────────────────────────────────────────────
 btnResizeFit.addEventListener("click", async () => {
-  if (!current) { setStatus("Load an image first.", "error"); return; }
+  if (!original) { setStatus("Load an image first.", "error"); return; }
   const w = parseInt((document.getElementById("resizeW") as HTMLInputElement).value);
   const h = parseInt((document.getElementById("resizeH") as HTMLInputElement).value);
   setStatus("Resizing (fit)…");
   try {
-    const result = current.resizeFit(w, h);
+    const result = original.resizeFit(w, h);
     await showResult(result, "Resize fit");
   } catch (e) {
     setStatus(String(e), "error");

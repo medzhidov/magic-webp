@@ -5,16 +5,15 @@
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build:wasm": "scripts\\wasm-pack.cmd build --target bundler --out-dir pkg",
-    "build:wasm:dev": "scripts\\wasm-pack.cmd build --dev --target bundler --out-dir pkg",
-    "demo": "pnpm run build:wasm:dev && pnpm run demo:watch",
+    "build:wasm": "powershell -ExecutionPolicy Bypass -File build.ps1",
+    "build:wasm:dev": "powershell -ExecutionPolicy Bypass -File build.ps1",
+    "demo": "pnpm run build:wasm && pnpm run demo:watch",
     "demo:watch": "vite demo",
     "demo:build": "pnpm run build:wasm && vite build demo",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "check": "scripts\\cargo.cmd check",
-    "test:rust": "scripts\\cargo.cmd test"
+    "test:native": "powershell -ExecutionPolicy Bypass -File test-native.ps1"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",
