@@ -21,12 +21,9 @@ emcmake cmake ..
 echo "🔧 Building..."
 emmake make
 
-# Copy output to pkg
-echo "📦 Copying output to pkg/..."
+# Output is already in pkg/ (configured in CMakeLists.txt)
+echo "📦 WASM files generated in pkg/..."
 cd ..
-mkdir -p pkg
-cp build/magic_webp.js pkg/magic_webp.mjs
-cp build/magic_webp.wasm pkg/
 
 # Generate package.json for pkg
 cat > pkg/package.json << 'EOF'
