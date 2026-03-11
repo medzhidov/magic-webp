@@ -112,6 +112,62 @@ webp.terminate();
 - **Webpack**: Use `worker-loader` or native Worker support
 - **Create React App**: Place worker in `public/` folder
 
+### 6. Vite Configuration (Important!)
+
+If using Vite, you need to configure it to properly handle WASM files:
+
+**Step 1: Update `vite.config.ts`**
+
+```typescript
+export default defineConfig({
+  // ... other config
+
+  optimizeDeps: {
+    exclude: ['magic-webp'], // Don't pre-bundle magic-webp
+  },
+
+  assetsInclude: ['**/*.wasm'], // Treat .wasm as assets
+
+  build: {
+    rollupOptions: {
+      output: {
+        assetFileNames: (chunkInfo) => {
+          // Keep WASM files unhashed so Emscripten can find them
+          if (chunkInfo.names?.includes('magic_webp.wasm')) {
+            return 'assets/[name].[ext]';
+          }
+          return 'assets/[name]-[hash].[ext]';
+        },
+      },
+    },
+  },
+});
+```
+
+**Step 2: Copy WASM to public folder (for development)**
+
+```bash
+cp node_modules/magic-webp/pkg/magic_webp.wasm public/
+```
+
+**Why?** Vite needs to serve WASM files with correct MIME type (`application/wasm`). Without this config, you'll get errors like:
+- ❌ `Failed to execute 'compile' on 'WebAssembly': Incorrect response MIME type`
+- ❌ `expected magic word 00 61 73 6d, found 3c 21 44 4f`
+
+**Alternative: Main Thread API (No Vite config needed)**
+
+If you don't want to configure Vite, use the main thread API instead:
+
+```typescript
+import { MagicWebp } from 'magic-webp';
+
+const img = await MagicWebp.fromBlob(file);
+const resized = await img.resize(400, 400, { mode: 'cover' });
+const blob = resized.toBlob();
+```
+
+⚠️ Note: Main thread API blocks UI during processing, but requires no build configuration.
+
 **Common Issues:**
 ```typescript
 // ❌ WRONG: Cross-origin
