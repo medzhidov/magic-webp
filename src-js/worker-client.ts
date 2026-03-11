@@ -82,7 +82,7 @@ export class MagicWebpWorker {
       this.isLoaded = true;
       pending.resolve({ width, height });
     } else if (type === 'result') {
-      pending.resolve(new Blob([data!], { type: 'image/webp' }));
+      pending.resolve(new Blob([data!.buffer as ArrayBuffer], { type: 'image/webp' }));
     }
   }
 

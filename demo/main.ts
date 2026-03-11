@@ -3,8 +3,11 @@
  * Uses MagicWebpWorker API for background processing to keep UI responsive
  */
 
-import { MagicWebpWorker } from '../src-js/worker-client.js';
+import { MagicWebpWorker, setDebugMode } from '../src-js/index.js';
 import WorkerUrl from '../src-js/worker.ts?worker&url';
+
+// Enable debug mode for demo (disabled by default in production)
+setDebugMode(true);
 
 // Create worker using MagicWebpWorker API
 const webp = new MagicWebpWorker(WorkerUrl);

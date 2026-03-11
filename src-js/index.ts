@@ -36,54 +36,13 @@ export interface ResizeOptions {
   quality?: number;  // 0-100, default 90
 }
 
+// ── Logging ───────────────────────────────────────────────────────────────
+
+import { debug } from './logger.js';
+
 // ── Emscripten WASM types ─────────────────────────────────────────────────
 
-interface EmscriptenModule {
-  _malloc(size: number): number;
-  _free(ptr: number): void;
-  _magic_webp_crop(
-    dataPtr: number,
-    dataSize: number,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    quality: number,
-    outSizePtr: number
-  ): number;
-  _magic_webp_resize(
-    dataPtr: number,
-    dataSize: number,
-    width: number,
-    height: number,
-    quality: number,
-    outSizePtr: number
-  ): number;
-  _magic_webp_resize_fit(
-    dataPtr: number,
-    dataSize: number,
-    maxWidth: number,
-    maxHeight: number,
-    quality: number,
-    outSizePtr: number
-  ): number;
-  _magic_webp_resize_cover(
-    dataPtr: number,
-    dataSize: number,
-    targetWidth: number,
-    targetHeight: number,
-    cropX: number,
-    cropY: number,
-    quality: number,
-    outSizePtr: number
-  ): number;
-  _magic_webp_free(ptr: number): void;
-  _magic_webp_get_error(): number;
-  UTF8ToString(ptr: number): string;
-  getValue(ptr: number, type: string): number;
-  setValue(ptr: number, value: number, type: string): void;
-  writeArrayToMemory(array: Uint8Array, buffer: number): void;
-}
+import type { EmscriptenModule } from '../pkg/magic_webp.js';
 
 // ── WASM module (lazy-loaded once) ────────────────────────────────────────
 
@@ -93,21 +52,21 @@ let wasmModule: EmscriptenModule | null = null;
 async function ensureWasm(): Promise<void> {
   if (wasmReady) return;
 
-  console.log("[magic-webp] Loading Emscripten WASM module...");
+  debug("[magic-webp] Loading Emscripten WASM module...");
 
   // Import the Emscripten module factory
   const createModule = (await import("../pkg/magic_webp.mjs")).default;
   wasmModule = await createModule() as any;
 
-  console.log("[magic-webp] Module loaded, checking properties...");
-  console.log("[magic-webp] Module keys:", Object.keys(wasmModule).slice(0, 20));
-  console.log("[magic-webp] Has HEAPU8:", !!wasmModule.HEAPU8);
-  console.log("[magic-webp] HEAPU8 type:", typeof wasmModule.HEAPU8);
-  console.log("[magic-webp] Has _malloc:", !!wasmModule._malloc);
-  console.log("[magic-webp] Has _magic_webp_crop:", !!wasmModule._magic_webp_crop);
+  debug("[magic-webp] Module loaded, checking properties...");
+  debug("[magic-webp] Module keys:", Object.keys(wasmModule || {}).slice(0, 20));
+  debug("[magic-webp] Has HEAPU8:", !!(wasmModule && wasmModule.HEAPU8));
+  debug("[magic-webp] HEAPU8 type:", wasmModule ? typeof wasmModule.HEAPU8 : 'undefined');
+  debug("[magic-webp] Has _malloc:", !!(wasmModule && wasmModule._malloc));
+  debug("[magic-webp] Has _magic_webp_crop:", !!(wasmModule && wasmModule._magic_webp_crop));
 
   wasmReady = true;
-  console.log("[magic-webp] WASM module ready");
+  debug("[magic-webp] WASM module ready");
 }
 
 // ── Operation Queue (for thread-safety) ───────────────────────────────────
@@ -139,7 +98,7 @@ function getLastError(): string {
 
 async function getWebPDimensions(webpData: Uint8Array): Promise<{ width: number; height: number }> {
   // Create a blob and use createImageBitmap to get dimensions
-  const blob = new Blob([webpData], { type: 'image/webp' });
+  const blob = new Blob([webpData.buffer as ArrayBuffer], { type: 'image/webp' });
   const bitmap = await createImageBitmap(blob);
   const dimensions = { width: bitmap.width, height: bitmap.height };
   bitmap.close();
@@ -156,18 +115,18 @@ function processWebPInternal(
 ): Uint8Array {
   if (!wasmModule) throw new Error("WASM module not initialized");
 
-  console.log(`[magic-webp] Processing ${webpData.length} bytes`);
+  debug(`[magic-webp] Processing ${webpData.length} bytes`);
 
   // Allocate input buffer
   const dataPtr = wasmModule._malloc(webpData.length);
   if (!dataPtr) throw new Error("Failed to allocate memory for input");
 
-  console.log(`[magic-webp] Allocated input at ${dataPtr}`);
+  debug(`[magic-webp] Allocated input at ${dataPtr}`);
 
   // Copy input data to WASM heap using Emscripten API
   wasmModule.writeArrayToMemory(webpData, dataPtr);
 
-  console.log(`[magic-webp] Copied input data`);
+  debug(`[magic-webp] Copied input data`);
 
   // Allocate output size pointer (4 bytes for size_t)
   const outSizePtr = wasmModule._malloc(4);
@@ -176,13 +135,13 @@ function processWebPInternal(
     throw new Error("Failed to allocate memory for output size");
   }
 
-  console.log(`[magic-webp] Allocated output size ptr at ${outSizePtr}`);
+  debug(`[magic-webp] Allocated output size ptr at ${outSizePtr}`);
 
   try {
     // Call the operation
     const resultPtr = operation(dataPtr, webpData.length, outSizePtr);
 
-    console.log(`[magic-webp] Operation returned ptr: ${resultPtr}`);
+    debug(`[magic-webp] Operation returned ptr: ${resultPtr}`);
 
     if (!resultPtr) {
       const error = getLastError();
@@ -192,7 +151,7 @@ function processWebPInternal(
     // Read output size using getValue
     const outSize = wasmModule.getValue(outSizePtr, 'i32');
 
-    console.log(`[magic-webp] Output size: ${outSize} bytes`);
+    debug(`[magic-webp] Output size: ${outSize} bytes`);
 
     if (!outSize || outSize <= 0) {
       throw new Error(`Invalid output size: ${outSize}`);
@@ -204,7 +163,7 @@ function processWebPInternal(
       result[i] = wasmModule.getValue(resultPtr + i, 'i8');
     }
 
-    console.log(`[magic-webp] Copied result`);
+    debug(`[magic-webp] Copied result`);
 
     // Free result
     wasmModule._magic_webp_free(resultPtr);
@@ -294,7 +253,7 @@ export class MagicWebp {
    */
   async crop(x: number, y: number, width: number, height: number, quality: number = 75): Promise<MagicWebp> {
     return enqueueOperation(() => {
-      console.log(`[magic-webp] Cropping: ${x},${y} ${width}x${height}, quality: ${quality}`);
+      debug(`[magic-webp] Cropping: ${x},${y} ${width}x${height}, quality: ${quality}`);
       const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
         return wasmModule!._magic_webp_crop(
           dataPtr,
@@ -307,7 +266,7 @@ export class MagicWebp {
           outSizePtr
         );
       });
-      console.log(`[magic-webp] Crop result: ${result.length} bytes`);
+      debug(`[magic-webp] Crop result: ${result.length} bytes`);
       // Result dimensions are the crop dimensions
       return new MagicWebp(result, width, height);
     });
@@ -371,7 +330,7 @@ export class MagicWebp {
   // ── Private resize implementations ────────────────────────────────────
 
   private _resizeFill(width: number, height: number, quality: number): MagicWebp {
-    console.log(`[magic-webp] Resize fill: ${width}x${height}, quality: ${quality}`);
+    debug(`[magic-webp] Resize fill: ${width}x${height}, quality: ${quality}`);
     const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
       return wasmModule!._magic_webp_resize(dataPtr, dataSize, width, height, quality, outSizePtr);
     });
@@ -379,7 +338,7 @@ export class MagicWebp {
   }
 
   private _resizeContain(width: number, height: number, quality: number): MagicWebp {
-    console.log(`[magic-webp] Resize contain: ${width}x${height}, quality: ${quality}`);
+    debug(`[magic-webp] Resize contain: ${width}x${height}, quality: ${quality}`);
     const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
       return wasmModule!._magic_webp_resize_fit(dataPtr, dataSize, width, height, quality, outSizePtr);
     });
@@ -394,8 +353,8 @@ export class MagicWebp {
   private _resizeInside(width: number, height: number, quality: number): MagicWebp {
     // Don't enlarge - if image is smaller, keep original size
     if (this._width! <= width && this._height! <= height) {
-      console.log(`[magic-webp] Resize inside: keeping original ${this._width}x${this._height}`);
-      return new MagicWebp(this._data, this._width, this._height);
+      debug(`[magic-webp] Resize inside: keeping original ${this._width}x${this._height}`);
+      return new MagicWebp(this._data, this._width ?? undefined, this._height ?? undefined);
     }
 
     // Otherwise, same as contain
@@ -405,7 +364,7 @@ export class MagicWebp {
   private _resizeOutside(width: number, height: number, position: Position, quality: number): MagicWebp {
     // Don't reduce - if image is larger, just crop
     if (this._width! >= width && this._height! >= height) {
-      console.log(`[magic-webp] Resize outside: cropping ${this._width}x${this._height} to ${width}x${height}`);
+      debug(`[magic-webp] Resize outside: cropping ${this._width}x${this._height} to ${width}x${height}`);
       const { x, y } = this._calculateCropPosition(this._width!, this._height!, width, height, position);
       const result = processWebPInternal(this._data, (dataPtr, dataSize, outSizePtr) => {
         return wasmModule!._magic_webp_crop(dataPtr, dataSize, x, y, width, height, quality, outSizePtr);
@@ -418,7 +377,7 @@ export class MagicWebp {
   }
 
   private _resizeCover(width: number, height: number, position: Position, quality: number): MagicWebp {
-    console.log(`[magic-webp] Resize cover: ${width}x${height}, position: ${position}, quality: ${quality}`);
+    debug(`[magic-webp] Resize cover: ${width}x${height}, position: ${position}, quality: ${quality}`);
 
     // Calculate scale to cover (scale by the larger ratio)
     const scaleX = width / this._width!;
@@ -488,7 +447,7 @@ export class MagicWebp {
 
   /** WebP Blob. */
   toBlob(): Blob {
-    return new Blob([this._data], { type: "image/webp" });
+    return new Blob([this._data.buffer as ArrayBuffer], { type: "image/webp" });
   }
 
   /** Data URL (base64-encoded WebP). */
@@ -546,3 +505,4 @@ export async function resize(
 // ── Exports ───────────────────────────────────────────────────────────────
 
 export { MagicWebpWorker } from './worker-client.js';
+export { setDebugMode, isDebugMode } from './logger.js';

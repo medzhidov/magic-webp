@@ -7,8 +7,9 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "types": ["vite/client"]
   },
-  "include": ["src-js/**/*.ts", "demo/**/*.ts"]
+  "include": ["src-js/**/*.ts", "demo/**/*.ts", "vite-env.d.ts", "pkg/magic_webp.d.ts"]
 }
 

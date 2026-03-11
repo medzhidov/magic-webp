@@ -48,7 +48,7 @@ set(EMSCRIPTEN_FLAGS
     -sEXPORT_ES6=1
     -sMODULARIZE=1
     -sEXPORT_NAME=createMagicWebpModule
-    -sEXPORTED_FUNCTIONS=['_malloc','_free','_magic_webp_crop','_magic_webp_resize','_magic_webp_resize_fit','_magic_webp_free','_magic_webp_get_error']
+    -sEXPORTED_FUNCTIONS=['_malloc','_free','_magic_webp_crop','_magic_webp_resize','_magic_webp_resize_fit','_magic_webp_resize_cover','_magic_webp_free','_magic_webp_get_error']
     -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString','getValue','setValue','writeArrayToMemory']
     -sALLOW_MEMORY_GROWTH=1
     -sINITIAL_MEMORY=33554432
