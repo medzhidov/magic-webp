@@ -7,6 +7,30 @@ set(CMAKE_C_STANDARD 11)
 # Build libwebp
 # ────────────────────────────────────────────────────────────────────────────
 
+# Enable image format support for Emscripten
+if(EMSCRIPTEN)
+    # Use Emscripten ports for image libraries
+    add_compile_options(-sUSE_LIBPNG=1 -sUSE_LIBJPEG=1)
+    add_link_options(-sUSE_LIBPNG=1 -sUSE_LIBJPEG=1)
+
+    # Define macros for imageio decoders
+    add_compile_definitions(WEBP_HAVE_PNG=1 WEBP_HAVE_JPEG=1)
+
+    # Create fake targets for find_package to find
+    add_library(PNG::PNG INTERFACE IMPORTED)
+    add_library(JPEG::JPEG INTERFACE IMPORTED)
+
+    # Tell CMake we found these packages
+    set(PNG_FOUND TRUE CACHE BOOL "" FORCE)
+    set(JPEG_FOUND TRUE CACHE BOOL "" FORCE)
+    set(GIF_FOUND FALSE CACHE BOOL "" FORCE)
+
+    # Tell libwebp that we have these libraries
+    set(WEBP_HAVE_PNG TRUE CACHE BOOL "Enable PNG support" FORCE)
+    set(WEBP_HAVE_JPEG TRUE CACHE BOOL "Enable JPEG support" FORCE)
+    set(WEBP_HAVE_GIF FALSE CACHE BOOL "Enable GIF support" FORCE)
+endif()
+
 set(WEBP_BUILD_ANIM_UTILS OFF CACHE BOOL "Build animation utilities")
 set(WEBP_BUILD_CWEBP OFF CACHE BOOL "Build cwebp")
 set(WEBP_BUILD_DWEBP OFF CACHE BOOL "Build dwebp")
@@ -26,10 +50,22 @@ add_subdirectory(libwebp)
 add_executable(magic_webp
     src-c/magic_webp.c
     src-c/animation.c
+    src-c/gifdec_stb.c
+    # imageio sources for format conversion
+    libwebp/imageio/image_dec.c
+    libwebp/imageio/jpegdec.c
+    libwebp/imageio/metadata.c
+    libwebp/imageio/pngdec.c
+    libwebp/imageio/pnmdec.c
+    libwebp/imageio/tiffdec.c
+    libwebp/imageio/webpdec.c
+    libwebp/imageio/wicdec.c
+    libwebp/imageio/imageio_util.c
 )
 
 target_include_directories(magic_webp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/libwebp/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/libwebp
 )
 
 target_link_libraries(magic_webp
@@ -48,7 +84,7 @@ set(EMSCRIPTEN_FLAGS
     -sEXPORT_ES6=1
     -sMODULARIZE=1
     -sEXPORT_NAME=createMagicWebpModule
-    -sEXPORTED_FUNCTIONS=['_malloc','_free','_magic_webp_crop','_magic_webp_resize','_magic_webp_resize_fit','_magic_webp_resize_cover','_magic_webp_free','_magic_webp_get_error']
+    -sEXPORTED_FUNCTIONS=['_malloc','_free','_magic_webp_crop','_magic_webp_resize','_magic_webp_resize_fit','_magic_webp_resize_cover','_magic_webp_convert_to_webp','_magic_webp_free','_magic_webp_get_error']
     -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString','getValue','setValue','writeArrayToMemory']
     -sALLOW_MEMORY_GROWTH=1
     -sINITIAL_MEMORY=33554432
@@ -59,6 +95,9 @@ set(EMSCRIPTEN_FLAGS
     -sMODULARIZE=1
     -sIMPORTED_MEMORY=0
     --no-entry
+    # Image format support via Emscripten ports
+    -sUSE_LIBPNG=1
+    -sUSE_LIBJPEG=1
 )
 
 string(REPLACE ";" " " EMSCRIPTEN_FLAGS_STR "${EMSCRIPTEN_FLAGS}")

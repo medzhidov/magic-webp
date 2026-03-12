@@ -42,10 +42,21 @@ add_executable(test_webp
     test_webp.c
     ../src-c/magic_webp.c
     ../src-c/animation.c
+    # imageio sources for format conversion
+    ../libwebp/imageio/image_dec.c
+    ../libwebp/imageio/jpegdec.c
+    ../libwebp/imageio/metadata.c
+    ../libwebp/imageio/pngdec.c
+    ../libwebp/imageio/pnmdec.c
+    ../libwebp/imageio/tiffdec.c
+    ../libwebp/imageio/webpdec.c
+    ../libwebp/imageio/wicdec.c
+    ../libwebp/imageio/imageio_util.c
 )
 
 target_include_directories(test_webp PRIVATE
     ${WEBP_INCLUDE_DIR}
+    ${CMAKE_SOURCE_DIR}/../libwebp
 )
 
 target_link_libraries(test_webp

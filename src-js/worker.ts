@@ -33,7 +33,15 @@ interface ResizeMessage {
   quality?: number;
 }
 
-type WorkerMessage = LoadMessage | CropMessage | ResizeMessage;
+interface ConvertMessage {
+  type: 'convert';
+  id: number;
+  data: Uint8Array;
+  quality?: number;
+  lossless?: boolean;
+}
+
+type WorkerMessage = LoadMessage | CropMessage | ResizeMessage | ConvertMessage;
 
 // State
 let currentImage: MagicWebp | null = null;
@@ -103,6 +111,25 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
             type: 'result',
             id: msg.id,
             operation: `resize-${msg.mode || 'cover'}`,
+            data: output,
+            width: result.width,
+            height: result.height
+          });
+          break;
+        }
+
+        case 'convert': {
+          const quality = msg.quality !== undefined ? msg.quality : 75;
+          const lossless = msg.lossless !== undefined ? msg.lossless : false;
+          debug('[worker] Converting image to WebP, quality:', quality, 'lossless:', lossless);
+
+          const result = await MagicWebp.convert(msg.data, quality, lossless);
+          const output = result.toBytes();
+
+          self.postMessage({
+            type: 'result',
+            id: msg.id,
+            operation: 'convert',
             data: output,
             width: result.width,
             height: result.height

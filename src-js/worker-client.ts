@@ -158,6 +158,25 @@ export class MagicWebpWorker {
   }
 
   /**
+   * Convert any image format (PNG, JPEG, GIF, etc.) to WebP
+   * Supported formats: PNG, JPEG, GIF, TIFF, WebP
+   *
+   * @param blob - File or Blob containing the image data
+   * @param quality - Output quality (0-100, default 75 - balanced)
+   * @param lossless - Use lossless compression (default false)
+   * @returns Promise with result Blob containing WebP image
+   */
+  async convert(blob: Blob | File, quality: number = 75, lossless: boolean = false): Promise<Blob> {
+    const arrayBuffer = await blob.arrayBuffer();
+    return this.sendMessage({
+      type: 'convert',
+      data: new Uint8Array(arrayBuffer),
+      quality,
+      lossless
+    } as any);
+  }
+
+  /**
    * Get current image width
    */
   get width(): number | undefined {

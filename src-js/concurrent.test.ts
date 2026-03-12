@@ -8,7 +8,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const testImagePath = resolve(__dir, "..", "demo", "giphy.webp");
+const testImagePath = resolve(__dir, "..", "demo", "assets", "test-animated.webp");
 
 describe("MagicWebp concurrent operations", () => {
   it("should handle sequential operations correctly", async () => {

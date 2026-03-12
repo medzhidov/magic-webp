@@ -21,10 +21,13 @@ if (-not (Test-Path "test-output")) {
 Write-Host "Compiling test..." -ForegroundColor Yellow
 
 $emcc = ".\emsdk\upstream\emscripten\emcc.bat"
-$sources = "tests/test_webp.c", "src-c/magic_webp.c", "src-c/animation.c"
-$includes = "-I", "libwebp/src"
+$sources = "tests/test_webp.c", "src-c/magic_webp.c", "src-c/animation.c", "src-c/gifdec_stb.c", `
+    "libwebp/imageio/image_dec.c", "libwebp/imageio/jpegdec.c", "libwebp/imageio/metadata.c", `
+    "libwebp/imageio/pngdec.c", "libwebp/imageio/pnmdec.c", "libwebp/imageio/tiffdec.c", `
+    "libwebp/imageio/webpdec.c", "libwebp/imageio/wicdec.c", "libwebp/imageio/imageio_util.c"
+$includes = "-I", "libwebp/src", "-I", "libwebp"
 $libs = "build/libwebp/libwebp.a", "build/libwebp/libwebpdemux.a", "build/libwebp/libwebpmux.a", "build/libwebp/libsharpyuv.a"
-$flags = "-O2", "-sNODERAWFS=1", "-sENVIRONMENT=node", "-sALLOW_MEMORY_GROWTH=1"
+$flags = "-O2", "-sNODERAWFS=1", "-sENVIRONMENT=node", "-sALLOW_MEMORY_GROWTH=1", "-sUSE_LIBPNG=1", "-sUSE_LIBJPEG=1", "-DWEBP_HAVE_PNG=1", "-DWEBP_HAVE_JPEG=1"
 $output = "-o", "tests/test_webp.cjs"
 
 $allArgs = $sources + $includes + $libs + $flags + $output

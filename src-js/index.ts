@@ -91,6 +91,14 @@ interface EmscriptenModule {
     outSizePtr: number
   ): number;
 
+  _magic_webp_convert_to_webp(
+    dataPtr: number,
+    dataSize: number,
+    quality: number,
+    lossless: number,
+    outSizePtr: number
+  ): number;
+
   _magic_webp_free(ptr: number): void;
   _magic_webp_get_error(): number;
 
@@ -154,6 +162,22 @@ function getLastError(): string {
   if (!wasmModule) return "WASM module not initialized";
   const errorPtr = wasmModule._magic_webp_get_error();
   return wasmModule.UTF8ToString(errorPtr);
+}
+
+/**
+ * Check if data is a valid WebP file
+ * WebP files start with "RIFF" (bytes 0-3) and "WEBP" (bytes 8-11)
+ */
+function isWebPFormat(data: Uint8Array): boolean {
+  if (data.length < 12) return false;
+
+  // Check RIFF header
+  const riff = String.fromCharCode(data[0], data[1], data[2], data[3]);
+  if (riff !== 'RIFF') return false;
+
+  // Check WEBP signature
+  const webp = String.fromCharCode(data[8], data[9], data[10], data[11]);
+  return webp === 'WEBP';
 }
 
 async function getWebPDimensions(webpData: Uint8Array): Promise<{ width: number; height: number }> {
@@ -282,6 +306,11 @@ export class MagicWebp {
     const arrayBuffer = await blob.arrayBuffer();
     const data = new Uint8Array(arrayBuffer);
 
+    // Validate WebP format
+    if (!isWebPFormat(data)) {
+      throw new Error('Invalid WebP format. Use MagicWebp.convert() to convert other image formats to WebP first.');
+    }
+
     // Get dimensions
     const { width, height } = await getWebPDimensions(data);
 
@@ -290,6 +319,11 @@ export class MagicWebp {
 
   static async fromBytes(data: Uint8Array): Promise<MagicWebp> {
     await ensureWasm();
+
+    // Validate WebP format
+    if (!isWebPFormat(data)) {
+      throw new Error('Invalid WebP format. Use MagicWebp.convert() to convert other image formats to WebP first.');
+    }
 
     // Get dimensions
     const { width, height } = await getWebPDimensions(data);
@@ -301,6 +335,51 @@ export class MagicWebp {
     const response = await fetch(url);
     const blob = await response.blob();
     return MagicWebp.fromBlob(blob);
+  }
+
+  /**
+   * Convert any image format (PNG, JPEG, GIF, etc.) to WebP.
+   * Supported formats: PNG, JPEG, GIF, TIFF, WebP
+   *
+   * @param input - File, Blob, or Uint8Array containing the image data
+   * @param quality - Output quality (0-100, default 75 - balanced)
+   * @param lossless - Use lossless compression (default false)
+   * @returns MagicWebp instance with the converted WebP image
+   */
+  static async convert(
+    input: File | Blob | Uint8Array,
+    quality: number = 75,
+    lossless: boolean = false
+  ): Promise<MagicWebp> {
+    await ensureWasm();
+
+    // Get input data
+    let data: Uint8Array;
+    if (input instanceof Uint8Array) {
+      data = input;
+    } else {
+      const arrayBuffer = await input.arrayBuffer();
+      data = new Uint8Array(arrayBuffer);
+    }
+
+    return enqueueOperation(() => {
+      debug(`[magic-webp] Converting image to WebP, quality: ${quality}, lossless: ${lossless}`);
+
+      const result = processWebPInternal(data, (dataPtr, dataSize, outSizePtr) => {
+        return wasmModule!._magic_webp_convert_to_webp(
+          dataPtr,
+          dataSize,
+          quality,
+          lossless ? 1 : 0,
+          outSizePtr
+        );
+      });
+
+      // Get dimensions of the converted image
+      return getWebPDimensions(result).then(({ width, height }) => {
+        return new MagicWebp(result, width, height);
+      });
+    });
   }
 
   // ── Operations (chainable, each returns a Promise<MagicWebp>) ────────

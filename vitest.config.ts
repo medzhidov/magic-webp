@@ -1,4 +1,6 @@
 import { defineConfig } from "vitest/config";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 
 export default defineConfig({
   test: {
@@ -11,6 +13,7 @@ export default defineConfig({
       include: ["src-js/**/*.ts"],
       exclude: ["src-js/**/*.test.ts"],
     },
+    setupFiles: ["./vitest.setup.ts"],
   },
 });
 

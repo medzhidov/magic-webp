@@ -5,7 +5,7 @@
 
 import { MagicWebpWorker, setDebugMode } from '../src-js/index.js';
 import WorkerUrl from '../src-js/worker.ts?worker&url';
-import giphyWebpUrl from './giphy.webp?url';
+import testAnimatedWebpUrl from './assets/test-animated.webp?url';
 
 // Enable debug mode for demo (disabled by default in production)
 setDebugMode(true);
@@ -18,9 +18,9 @@ console.log("[demo] MagicWebpWorker created");
 // Auto-load default image on page load
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    const response = await fetch(giphyWebpUrl);
+    const response = await fetch(testAnimatedWebpUrl);
     const blob = await response.blob();
-    const file = new File([blob], 'giphy.webp', { type: 'image/webp' });
+    const file = new File([blob], 'test-animated.webp', { type: 'image/webp' });
     loadFile(file);
   } catch (e) {
     console.error('[demo] Failed to load default image:', e);
@@ -84,6 +84,16 @@ qualitySlider.addEventListener('input', (e) => {
 updateQualityLabel(75);
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+function isImageFile(file: File): boolean {
+  const supportedTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  return supportedTypes.includes(file.type) ||
+         file.name.match(/\.(png|jpe?g|gif|webp)$/i) !== null;
+}
+
+function needsConversion(file: File): boolean {
+  return file.type !== 'image/webp' && !file.name.toLowerCase().endsWith('.webp');
+}
+
 function setStatus(msg: string, kind: "ok" | "error" | "" = "") {
   if (msg) {
     statusContainer.innerHTML = `<div class="status ${kind}">${msg}</div>`;
@@ -145,10 +155,10 @@ uploadArea.addEventListener('drop', (e) => {
   e.preventDefault();
   uploadArea.classList.remove('dragover');
   const file = e.dataTransfer?.files[0];
-  if (file && file.type === 'image/webp') {
+  if (file && isImageFile(file)) {
     loadFile(file);
   } else {
-    setStatus('Please drop a WebP file', 'error');
+    setStatus('Please drop a supported image file (PNG, JPEG, GIF, WebP)', 'error');
   }
 });
 
@@ -171,25 +181,69 @@ async function loadFile(file: File) {
   enableButtons(false);
 
   try {
-    console.log("[demo] Loading file:", file.name);
+    console.log("[demo] Loading file:", file.name, "type:", file.type);
 
     // Show original image
     origImg.src = URL.createObjectURL(file);
     origImg.style.display = 'block';
-    origInfo.textContent = `Size: ${kb(file.size)}`;
 
-    // Clear result
-    resultImg.src = "";
-    resultImg.style.display = 'none';
-    resultInfo.textContent = "";
-    dlLink.style.display = "none";
+    const originalSize = file.size;
+    const fileType = file.type || `image/${file.name.split('.').pop()}`;
+
+    // Check if conversion is needed
+    let fileToLoad = file;
+    let convertedBlob: Blob | null = null;
+
+    if (needsConversion(file)) {
+      const formatName = fileType.replace('image/', '').toUpperCase();
+      setStatus(`🔄 Converting ${formatName} to WebP...`);
+      console.log("[demo] Converting", formatName, "to WebP");
+
+      // Convert to WebP using worker
+      convertedBlob = await webp.convert(file, 75, false);
+
+      // Create a new File object from the converted blob
+      fileToLoad = new File([convertedBlob], file.name.replace(/\.[^.]+$/, '.webp'), {
+        type: 'image/webp'
+      });
+
+      const compressionRatio = ((1 - convertedBlob.size / originalSize) * 100).toFixed(1);
+
+      console.log("[demo] Conversion complete:", kb(originalSize), "→", kb(convertedBlob.size));
+
+      // Show converted image in "Processed" section
+      resultImg.src = URL.createObjectURL(convertedBlob);
+      resultImg.style.display = 'block';
+      resultInfo.textContent = `Converted to WebP | ${kb(originalSize)} → ${kb(convertedBlob.size)} (${compressionRatio}% smaller)`;
+
+      // Setup download link
+      dlLink.href = URL.createObjectURL(convertedBlob);
+      dlLink.download = file.name.replace(/\.[^.]+$/, '.webp');
+      dlLink.style.display = 'inline-block';
+    } else {
+      // Clear result for WebP files
+      resultImg.src = "";
+      resultImg.style.display = 'none';
+      resultInfo.textContent = "";
+      dlLink.style.display = "none";
+    }
+
+    origInfo.textContent = `${fileType.replace('image/', '').toUpperCase()} | Size: ${kb(originalSize)}`;
 
     // Load image using MagicWebpWorker
-    const { width, height } = await webp.load(file);
+    // Note: fileToLoad is already in WebP format if conversion was needed
+    console.log("[demo] Loading into worker:", fileToLoad.name, "type:", fileToLoad.type, "size:", kb(fileToLoad.size));
+    const { width, height } = await webp.load(fileToLoad);
 
     // Update info with dimensions
-    origInfo.textContent = `${width} × ${height} px | Size: ${kb(file.size)}`;
-    setStatus(`✓ Image loaded: ${width}×${height} px`, "ok");
+    origInfo.textContent = `${fileType.replace('image/', '').toUpperCase()} | ${width} × ${height} px | Size: ${kb(originalSize)}`;
+
+    if (convertedBlob) {
+      setStatus(`✓ Image converted to WebP and loaded: ${width}×${height} px`, "ok");
+      console.log("[demo] Image ready for processing (crop, resize, etc.)");
+    } else {
+      setStatus(`✓ Image loaded: ${width}×${height} px`, "ok");
+    }
 
     isImageLoaded = true;
     isProcessing = false;
