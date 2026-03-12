@@ -2,17 +2,17 @@
 
 # 🎨 magic-webp
 
-**Fast WebP image processing in the browser using WebAssembly**
+**Convert PNG/JPEG/GIF to WebP and process images in the browser using WebAssembly**
 
 [![npm version](https://img.shields.io/npm/v/magic-webp.svg)](https://www.npmjs.com/package/magic-webp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-libwebp-654FF0)](https://developers.google.com/speed/webp)
 
-Process WebP images (static and animated) directly in the browser with native performance.
+Convert images to WebP and process them (crop, resize) directly in the browser with native performance.
 Built on top of Google's libwebp compiled to WebAssembly.
 
-**[🎮 Live Demo](https://medzhidov.github.io/magic-webp/)** • [Features](#-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [API](#-api) • [Development](#-development)
+**[🎮 Live Demo](https://medzhidov.github.io/magic-webp/)** • [Features](#-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [API](#-api)
 
 </div>
 
@@ -20,10 +20,11 @@ Built on top of Google's libwebp compiled to WebAssembly.
 
 ## ✨ Features
 
-- 🖼️ **WebP Support** — Both static and animated WebP images
+- 🔄 **Convert to WebP** — PNG, JPEG, GIF → WebP (60-80% smaller files)
+- 🎬 **Animated GIF Support** — Converts animated GIFs to animated WebP
 - ✂️ **Crop** — Extract regions (preserves animation frames)
 - 📐 **Resize** — Multiple modes: cover, contain, fill, inside, outside
-- 🎚️ **Quality Control** — Adjustable output quality (0-100, lossless)
+- 🎚️ **Quality Control** — Lossy (0-100) or lossless compression
 - 🚀 **Fast** — Native libwebp with SIMD optimizations (5-10x faster)
 - 🌐 **Browser-first** — No server required, runs entirely client-side
 - 🔒 **Thread-safe** — Automatic operation queuing for concurrent calls
@@ -41,42 +42,57 @@ yarn add magic-webp
 
 ## 🚀 Quick Start
 
-### Recommended: Using Web Worker (Non-blocking UI)
+### Convert Images to WebP
 
-**Step 1:** Copy `worker.js` to your public folder
+```typescript
+import { MagicWebp } from 'magic-webp';
 
-```bash
-# Copy from node_modules
-cp node_modules/magic-webp/src-js/worker.ts public/worker.js
+// Convert PNG/JPEG/GIF to WebP
+const file = document.querySelector('input[type="file"]').files[0];
+const webp = await MagicWebp.convert(file, 75, false);  // quality: 75, lossless: false
 
-# Or download from GitHub
-# https://github.com/medzhidov/magic-webp/blob/master/src-js/worker.ts
+// Get the result
+const blob = webp.toBlob();
+const url = URL.createObjectURL(blob);
+
+// Download or display
+document.querySelector('img').src = url;
 ```
 
-**Step 2:** Use the simple API
+### Process WebP Images
+
+```typescript
+import { MagicWebp } from 'magic-webp';
+
+// Load WebP image
+const webp = await MagicWebp.fromBlob(file);
+
+// Resize
+const resized = await webp.resize(400, 400, { mode: 'cover', quality: 75 });
+
+// Crop
+const cropped = await webp.crop(0, 0, 200, 200, 75);
+
+// Get result
+const blob = resized.toBlob();
+```
+
+### Using Web Worker (Recommended for Production)
 
 ```typescript
 import { MagicWebpWorker } from 'magic-webp';
 
-// Initialize worker
-const webp = new MagicWebpWorker('/worker.js');
+const worker = new MagicWebpWorker('/worker.js');
 
-// Load image
-const file = document.querySelector('input[type="file"]').files[0];
-await webp.load(file);
+// Convert in background
+const blob = await worker.convert(file, 75, false);
 
-// Resize (returns Blob directly!)
-const blob = await webp.resize(400, 400, { mode: 'cover', quality: 75 });  // 75 = balanced (recommended)
+// Or load and process
+await worker.load(webpFile);
+const resized = await worker.resize(400, 400, { mode: 'cover' });
 
-// Use the result
-const url = URL.createObjectURL(blob);
-document.querySelector('img').src = url;
-
-// Clean up when done
-webp.terminate();
+worker.terminate();
 ```
-
-**That's it!** No manual Worker management, no message passing, just simple async calls.
 
 > **✨ Benefits:** Non-blocking UI, better performance, automatic request queuing
 
@@ -201,44 +217,66 @@ const blob = resized.toBlob();
 
 ## 📖 API
 
-### MagicWebpWorker (Recommended)
-
-```typescript
-import { MagicWebpWorker } from 'magic-webp';
-
-// Initialize
-const webp = new MagicWebpWorker('/worker.js');
-
-// Load image
-await webp.load(file);  // File or Blob
-
-// Get dimensions
-console.log(webp.width, webp.height);
-
-// Crop
-const blob = await webp.crop(x, y, width, height, quality);
-
-// Resize
-const blob = await webp.resize(width, height, { mode, position, quality });
-
-// Clean up
-webp.terminate();
-```
-
-### MagicWebp (Main Thread)
+### Convert Images
 
 ```typescript
 import { MagicWebp } from 'magic-webp';
 
-// Load from File/Blob
-const img = await MagicWebp.fromBlob(blob);
-const img = await MagicWebp.fromFile(file);
+// Convert PNG/JPEG/GIF to WebP
+const webp = await MagicWebp.convert(
+  blob,           // File or Blob
+  75,             // quality: 0-100 (default: 75)
+  false           // lossless: true/false (default: false)
+);
 
-// Load from URL
-const img = await MagicWebp.fromUrl('https://example.com/image.webp');
+// Animated GIF → Animated WebP (preserves all frames!)
+const animatedWebp = await MagicWebp.convert(gifBlob, 75, false);
+```
 
-// Load from Uint8Array
-const img = await MagicWebp.fromBytes(uint8Array);
+### Load WebP Images
+
+```typescript
+import { MagicWebp } from 'magic-webp';
+
+// From File/Blob (WebP only)
+const webp = await MagicWebp.fromBlob(blob);
+
+// From URL
+const webp = await MagicWebp.fromUrl('https://example.com/image.webp');
+
+// From Uint8Array
+const webp = await MagicWebp.fromBytes(uint8Array);
+```
+
+### Process Images
+
+```typescript
+// Crop
+const cropped = await webp.crop(x, y, width, height, quality);
+
+// Resize
+const resized = await webp.resize(width, height, { mode, position, quality });
+
+// Get result
+const blob = webp.toBlob();
+const bytes = webp.toBytes();
+```
+
+### Using Web Worker
+
+```typescript
+import { MagicWebpWorker } from 'magic-webp';
+
+const worker = new MagicWebpWorker('/worker.js');
+
+// Convert
+const blob = await worker.convert(file, 75, false);
+
+// Load and process
+await worker.load(webpFile);
+const resized = await worker.resize(400, 400, { mode: 'cover' });
+
+worker.terminate();
 ```
 
 ### Transformations
@@ -323,79 +361,85 @@ interface ResizeOptions {
 
 ### Supported Formats
 
-**Input:**
-- ✅ Static WebP
-- ✅ Animated WebP (multi-frame)
+**Conversion (to WebP):**
+- ✅ PNG → WebP (static)
+- ✅ JPEG → WebP (static)
+- ✅ GIF → WebP (animated, preserves all frames!)
+- ✅ WebP → WebP (re-encode with different quality)
+
+**Processing (WebP only):**
+- ✅ Static WebP (crop, resize)
+- ✅ Animated WebP (crop, resize - all frames processed)
 
 **Output:**
-- ✅ Static WebP (from static input)
-- ✅ Animated WebP (from animated input, preserves all frames and timing)
+- ✅ WebP (lossy or lossless)
+- ✅ Animated WebP (preserves timing, loop count)
 
-**Note:** All operations (crop, resize) work on both static and animated WebP. For animated images, each frame is processed individually while preserving animation metadata (timing, loop count, etc.).
+**Note:** All operations (crop, resize) work on both static and animated WebP. For animated images, each frame is processed individually while preserving animation metadata.
 
 ## 💡 Examples
 
-### With Worker (Recommended)
+### Convert and Optimize
+
+```typescript
+import { MagicWebp } from 'magic-webp';
+
+// Simple conversion (PNG/JPEG → WebP)
+const webp = await MagicWebp.convert(pngFile, 75, false);
+const blob = webp.toBlob();  // 60-80% smaller!
+
+// Lossless conversion (perfect quality)
+const lossless = await MagicWebp.convert(pngFile, 100, true);
+
+// Animated GIF → Animated WebP
+const animatedWebp = await MagicWebp.convert(gifFile, 75, false);
+// Preserves all frames and timing!
+
+// Convert and resize in one go
+const webp = await MagicWebp.convert(jpegFile, 80, false);
+const thumbnail = await webp.resize(200, 200, { mode: 'cover' });
+```
+
+### Process WebP Images
 
 ```typescript
 import { MagicWebpWorker } from 'magic-webp';
 
-const webp = new MagicWebpWorker('/worker.js');
-await webp.load(file);
+const worker = new MagicWebpWorker('/worker.js');
+await worker.load(webpFile);
 
-// Avatar - square 200x200, centered (high quality for profile pics)
-const avatar = await webp.resize(200, 200, { mode: 'cover', quality: 85 });
+// Avatar - square 200x200, centered
+const avatar = await worker.resize(200, 200, { mode: 'cover', quality: 85 });
 
-// Product preview - fit inside 300x300 (balanced quality)
-const preview = await webp.resize(300, 300, { mode: 'contain', quality: 75 });
+// Product preview - fit inside 300x300
+const preview = await worker.resize(300, 300, { mode: 'contain', quality: 75 });
 
-// Banner - 1200x400, crop from top (high quality for hero images)
-const banner = await webp.resize(1200, 400, {
+// Banner - 1200x400, crop from top
+const banner = await worker.resize(1200, 400, {
   mode: 'cover',
   position: 'top',
   quality: 90
 });
 
-// Thumbnail - never enlarge (lower quality for small images)
-const thumb = await webp.resize(150, 150, { mode: 'inside', quality: 65 });
+// Crop specific region
+const cropped = await worker.crop(50, 50, 200, 200, 75);
 
-// Crop specific region (balanced quality)
-const cropped = await webp.crop(50, 50, 200, 200, 75);
-
-webp.terminate();
+worker.terminate();
 ```
 
-### With Main Thread
+### Batch Processing
 
 ```typescript
 import { MagicWebp } from 'magic-webp';
 
-const img = await MagicWebp.fromBlob(file);
+// Convert multiple images
+const files = Array.from(fileInput.files);
+const converted = await Promise.all(
+  files.map(file => MagicWebp.convert(file, 75, false))
+);
 
-// Chaining operations
-const result = await img
-  .crop(100, 100, 400, 400)
-  .then(cropped => cropped.resize(200, 200, { mode: 'contain' }));
-
-// Concurrent processing (automatically queued)
-const [avatar, thumb, banner] = await Promise.all([
-  img.resize(200, 200, { mode: 'cover' }),
-  img.resize(150, 150, { mode: 'inside' }),
-  img.resize(1200, 400, { mode: 'cover', position: 'top' })
-]);
-```
-
-### Animated WebP
-
-```typescript
-// Works with both static and animated WebP
-// For animated images, all frames are processed while preserving timing
-
-const webp = new MagicWebpWorker('/worker.js');
-await webp.load(animatedWebpFile);
-
-// All frames will be resized
-const resized = await webp.resize(400, 400, { mode: 'cover' });
+// Get all blobs
+const blobs = converted.map(webp => webp.toBlob());
 ```
 
 

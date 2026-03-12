@@ -1,17 +1,22 @@
 {
   "name": "magic-webp",
-  "version": "1.0.7",
-  "description": "Fast WebP (static and animated) image processing in the browser using WebAssembly",
+  "version": "1.0.8",
+  "description": "Convert PNG/JPEG/GIF to WebP and process images (crop, resize) in the browser using WebAssembly. Supports animated GIFs.",
   "keywords": [
     "webp",
     "image",
+    "convert",
     "resize",
     "crop",
+    "png",
+    "jpeg",
+    "gif",
     "wasm",
     "webassembly",
     "animated",
     "browser",
-    "animation"
+    "compression",
+    "optimization"
   ],
   "author": "medzhidov",
   "license": "MIT",
