@@ -179,6 +179,8 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
 
     uint32_t frame_count = WebPDemuxGetI(demux, WEBP_FF_FRAME_COUNT);
     uint32_t loop_count = WebPDemuxGetI(demux, WEBP_FF_LOOP_COUNT);
+    uint32_t canvas_width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
+    uint32_t canvas_height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
 
     if (frame_count == 0) {
         set_error("No frames found in WebP");
@@ -252,6 +254,22 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
             }
 
             WebPFreeDecBuffer(&config.output);
+
+            // Validate that all frames have the same size as canvas
+            // We don't support GIFs with variable frame sizes
+            if (pic.width != canvas_width || pic.height != canvas_height) {
+                char error_msg[256];
+                snprintf(error_msg, sizeof(error_msg),
+                        "Unsupported GIF: frame %d has size %dx%d but canvas is %ux%u. "
+                        "GIFs with variable frame sizes are not supported.",
+                        iter.frame_num, pic.width, pic.height, canvas_width, canvas_height);
+                set_error(error_msg);
+                WebPPictureFree(&pic);
+                WebPDemuxReleaseIterator(&iter);
+                WebPMuxDelete(mux);
+                WebPDemuxDelete(demux);
+                return NULL;
+            }
 
             // Apply transformation directly to WebPPicture
             if (!transform(&pic, transform_params)) {
