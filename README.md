@@ -62,16 +62,19 @@ document.querySelector('img').src = url;
 
 ### Process WebP Images
 
+> **⚠️ Important:** `fromBlob`, `fromBytes`, and `fromUrl` accept **WebP files only**. To process PNG/JPEG/GIF, use `MagicWebp.convert()` first.
+
 ```typescript
 import { MagicWebp } from 'magic-webp';
 
-// Load WebP image
-const webp = await MagicWebp.fromBlob(file);
+// Convert to WebP first (if input is PNG/JPEG/GIF)
+const file = document.querySelector('input[type="file"]').files[0];
+const webp = await MagicWebp.convert(file, 75, false);
 
-// Resize
+// Then process: resize
 const resized = await webp.resize(400, 400, { mode: 'cover', quality: 75 });
 
-// Crop
+// Or crop
 const cropped = await webp.crop(0, 0, 200, 200, 75);
 
 // Get result
@@ -82,8 +85,9 @@ const blob = resized.toBlob();
 
 ```typescript
 import { MagicWebpWorker } from 'magic-webp';
+import WorkerUrl from 'magic-webp/worker?worker&url'; // Vite only
 
-const worker = new MagicWebpWorker('/worker.js');
+const worker = new MagicWebpWorker(WorkerUrl);
 
 // Convert in background
 const blob = await worker.convert(file, 75, false);
@@ -120,70 +124,42 @@ worker.terminate();
 - ✅ Use local dev server: `npx serve` or `python -m http.server`
 
 **5. Build Tools**
-- **Vite**: Worker is automatically bundled
+- **Vite**: Use `?worker&url` import syntax (requires Vite config below):
   ```typescript
-  const webp = new MagicWebpWorker(
-    new URL('./worker.ts', import.meta.url).href
-  );
+  import WorkerUrl from 'magic-webp/worker?worker&url';
+  const webp = new MagicWebpWorker(WorkerUrl);
   ```
 - **Webpack**: Use `worker-loader` or native Worker support
-- **Create React App**: Place worker in `public/` folder
+- **Without bundler**: Copy `node_modules/magic-webp/lib/worker.js` to your public folder and use `new MagicWebpWorker('/worker.js')`
 
 ### 6. Vite Configuration (Important!)
 
-If using Vite, you need to configure it to properly handle WASM files:
+Install the required plugins:
 
-**Step 1: Update `vite.config.ts`**
+```bash
+npm install -D vite-plugin-wasm vite-plugin-top-level-await
+```
+
+Update `vite.config.ts`:
 
 ```typescript
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
+import { defineConfig } from 'vite';
+
 export default defineConfig({
-  // ... other config
-
+  plugins: [wasm(), topLevelAwait()],
   optimizeDeps: {
-    exclude: ['magic-webp'], // Don't pre-bundle magic-webp
-  },
-
-  assetsInclude: ['**/*.wasm'], // Treat .wasm as assets
-
-  build: {
-    rollupOptions: {
-      output: {
-        assetFileNames: (chunkInfo) => {
-          // Keep WASM files unhashed so Emscripten can find them
-          if (chunkInfo.names?.includes('magic_webp.wasm')) {
-            return 'assets/[name].[ext]';
-          }
-          return 'assets/[name]-[hash].[ext]';
-        },
-      },
-    },
+    exclude: ['magic-webp'],
   },
 });
 ```
 
-**Step 2: Copy WASM to public folder (for development)**
-
-```bash
-cp node_modules/magic-webp/pkg/magic_webp.wasm public/
-```
-
-**Why?** Vite needs to serve WASM files with correct MIME type (`application/wasm`). Without this config, you'll get errors like:
+**Why?** `vite-plugin-wasm` handles WASM loading with the correct MIME type and streaming instantiation. Without it, you'll get errors like:
 - ❌ `Failed to execute 'compile' on 'WebAssembly': Incorrect response MIME type`
 - ❌ `expected magic word 00 61 73 6d, found 3c 21 44 4f`
 
-**Alternative: Main Thread API (No Vite config needed)**
-
-If you don't want to configure Vite, use the main thread API instead:
-
-```typescript
-import { MagicWebp } from 'magic-webp';
-
-const img = await MagicWebp.fromBlob(file);
-const resized = await img.resize(400, 400, { mode: 'cover' });
-const blob = resized.toBlob();
-```
-
-⚠️ Note: Main thread API blocks UI during processing, but requires no build configuration.
+> ⚠️ **Note:** Both the Worker API and the Main Thread API require this Vite configuration — WASM loading happens in both cases.
 
 **Common Issues:**
 ```typescript
@@ -191,26 +167,27 @@ const blob = resized.toBlob();
 const webp = new MagicWebpWorker('https://cdn.com/worker.js');
 // Error: Failed to construct 'Worker': Script at '...' cannot be accessed from origin '...'
 
-// ✅ CORRECT: Same origin
+// ✅ CORRECT: Vite (recommended)
+import WorkerUrl from 'magic-webp/worker?worker&url';
+const webp = new MagicWebpWorker(WorkerUrl);
+
+// ✅ CORRECT: Without bundler (copy lib/worker.js to public/ first)
 const webp = new MagicWebpWorker('/worker.js');
-
-// ✅ CORRECT: Relative path
-const webp = new MagicWebpWorker('./worker.js');
-
-// ✅ CORRECT: Vite/Webpack (bundled)
-const webp = new MagicWebpWorker(
-  new URL('./worker.ts', import.meta.url).href
-);
 ```
 
 ### Alternative: Main Thread (Simpler, but blocks UI)
 
+> **⚠️ Important:** `fromBlob` accepts **WebP files only**. Use `MagicWebp.convert()` first to convert PNG/JPEG/GIF.
+
 ```typescript
 import { MagicWebp } from 'magic-webp';
 
-const file = document.querySelector('input[type="file"]').files[0];
-const img = await MagicWebp.fromBlob(file);
-const resized = await img.resize(400, 400, { mode: 'cover', quality: 75 });  // 75 = balanced
+// If input is already WebP:
+const img = await MagicWebp.fromBlob(webpFile);
+// If input is PNG/JPEG/GIF — convert first:
+// const img = await MagicWebp.convert(file, 75, false);
+
+const resized = await img.resize(400, 400, { mode: 'cover', quality: 75 });
 const blob = resized.toBlob();
 ```
 
@@ -267,8 +244,9 @@ const bytes = webp.toBytes();
 
 ```typescript
 import { MagicWebpWorker } from 'magic-webp';
+import WorkerUrl from 'magic-webp/worker?worker&url'; // Vite only
 
-const worker = new MagicWebpWorker('/worker.js');
+const worker = new MagicWebpWorker(WorkerUrl);
 
 // Convert
 const blob = await worker.convert(file, 75, false);
@@ -405,8 +383,9 @@ const thumbnail = await webp.resize(200, 200, { mode: 'cover' });
 
 ```typescript
 import { MagicWebpWorker } from 'magic-webp';
+import WorkerUrl from 'magic-webp/worker?worker&url'; // Vite only
 
-const worker = new MagicWebpWorker('/worker.js');
+const worker = new MagicWebpWorker(WorkerUrl);
 await worker.load(webpFile);
 
 // Avatar - square 200x200, centered
@@ -450,8 +429,10 @@ const blobs = converted.map(webp => webp.toBlob());
 ### Memory Management
 
 ```typescript
+import WorkerUrl from 'magic-webp/worker?worker&url'; // Vite only
+
 // Worker automatically manages memory, but you should terminate when done
-const webp = new MagicWebpWorker('/worker.js');
+const webp = new MagicWebpWorker(WorkerUrl);
 
 // ... use worker ...
 
@@ -485,7 +466,9 @@ setDebugMode(false);
 ### Error Handling
 
 ```typescript
-const webp = new MagicWebpWorker('/worker.js');
+import WorkerUrl from 'magic-webp/worker?worker&url'; // Vite only
+
+const webp = new MagicWebpWorker(WorkerUrl);
 
 try {
   await webp.load(file);
@@ -499,11 +482,13 @@ try {
 ### Multiple Workers (Parallel Processing)
 
 ```typescript
+import WorkerUrl from 'magic-webp/worker?worker&url'; // Vite only
+
 // Create multiple workers for parallel processing
 const workers = [
-  new MagicWebpWorker('/worker.js'),
-  new MagicWebpWorker('/worker.js'),
-  new MagicWebpWorker('/worker.js')
+  new MagicWebpWorker(WorkerUrl),
+  new MagicWebpWorker(WorkerUrl),
+  new MagicWebpWorker(WorkerUrl)
 ];
 
 // Process multiple images in parallel
