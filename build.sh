@@ -21,29 +21,12 @@ emcmake cmake ..
 echo "🔧 Building..."
 emmake make
 
-# Output is already in pkg/ (configured in CMakeLists.txt)
-echo "📦 WASM files generated in pkg/..."
+# Output is already in lib/ (configured in CMakeLists.txt)
+echo "📦 WASM module generated in lib/..."
 cd ..
 
-# Generate package.json for pkg
-cat > pkg/package.json << 'EOF'
-{
-  "name": "magic-webp",
-  "type": "module",
-  "main": "./magic_webp.mjs",
-  "types": "./magic_webp.d.ts",
-  "exports": {
-    ".": {
-      "import": "./magic_webp.mjs",
-      "types": "./magic_webp.d.ts"
-    }
-  }
-}
-EOF
+# Copy type declarations to lib/
+cp src-js/magic_webp.d.mts lib/magic_webp.d.mts
 
-# Build TypeScript
-echo "📝 Building TypeScript..."
-npx tsc
-
-echo "✅ Build complete! Output in pkg/"
+echo "✅ WASM build complete! Output in lib/"
 

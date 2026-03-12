@@ -14,9 +14,9 @@ if (Test-Path $buildDir) {
 }
 New-Item -ItemType Directory -Path $buildDir | Out-Null
 
-# Create pkg directory if it doesn't exist
-if (-not (Test-Path "pkg")) {
-    New-Item -ItemType Directory -Path "pkg" | Out-Null
+# Create lib directory if it doesn't exist
+if (-not (Test-Path "lib")) {
+    New-Item -ItemType Directory -Path "lib" | Out-Null
 }
 
 # Run CMake with Emscripten
@@ -30,5 +30,8 @@ ninja
 
 Set-Location ..
 
-Write-Host "Build complete! Output in pkg/" -ForegroundColor Green
+# Copy type declarations to lib/
+Copy-Item "src-js/magic_webp.d.mts" "lib/magic_webp.d.mts"
+
+Write-Host "Build complete! Output in lib/" -ForegroundColor Green
 

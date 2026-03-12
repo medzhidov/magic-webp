@@ -161,6 +161,19 @@ export default defineConfig({
 
 > ⚠️ **Note:** Both the Worker API and the Main Thread API require this Vite configuration — WASM loading happens in both cases.
 
+### Without bundler / other build tools
+
+If you're not using Vite, the library works with any HTTP server — no special configuration needed. The WASM module is located automatically via `import.meta.url`.
+
+The only requirement: **`magic_webp.wasm` must be in the same folder as `magic_webp.mjs`** on your server. Copy both `lib/` and `pkg/` preserving their relative structure:
+
+```bash
+cp -r node_modules/magic-webp/lib/ public/lib/
+cp -r node_modules/magic-webp/pkg/ public/pkg/
+```
+
+> ❌ Won't work with `file://` protocol — use a local HTTP server (`npx serve`, `python -m http.server`, etc.)
+
 **Common Issues:**
 ```typescript
 // ❌ WRONG: Cross-origin

@@ -94,6 +94,7 @@ set(EMSCRIPTEN_FLAGS
     -sNO_FILESYSTEM=1
     -sMODULARIZE=1
     -sIMPORTED_MEMORY=0
+    -sSINGLE_FILE=1
     --no-entry
     # Image format support via Emscripten ports
     -sUSE_LIBPNG=1
@@ -112,6 +113,6 @@ set_target_properties(magic_webp PROPERTIES
 # ────────────────────────────────────────────────────────────────────────────
 
 set_target_properties(magic_webp PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/pkg"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/lib"
 )
 

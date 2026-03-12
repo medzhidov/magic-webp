@@ -83,14 +83,12 @@ export class MagicWebpWorker {
       this.isLoaded = true;
       pending.resolve({ width, height });
     } else if (type === 'result') {
-      // Update dimensions if provided (e.g., from convert operation)
-      if (width !== undefined && height !== undefined) {
+      // Only update dimensions for convert — it produces a new loadable image.
+      // crop/resize return a processed blob but don't change the loaded image state.
+      if (operation === 'convert' && width !== undefined && height !== undefined) {
         this.imageWidth = width;
         this.imageHeight = height;
-        // Mark as loaded if this was a convert operation
-        if (operation === 'convert') {
-          this.isLoaded = true;
-        }
+        this.isLoaded = true;
       }
       pending.resolve(new Blob([data!.buffer as ArrayBuffer], { type: 'image/webp' }));
     }

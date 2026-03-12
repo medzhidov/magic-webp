@@ -10,6 +10,6 @@
     "isolatedModules": true,
     "types": ["vite/client"]
   },
-  "include": ["src-js/**/*.ts", "demo/**/*.ts", "vite-env.d.ts", "pkg/magic_webp.d.ts"]
+  "include": ["src-js/**/*.ts", "demo/**/*.ts", "vite-env.d.ts"]
 }
 

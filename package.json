@@ -39,10 +39,6 @@
   },
   "files": [
     "lib/**/*",
-    "pkg/*.mjs",
-    "pkg/*.wasm",
-    "pkg/*.d.ts",
-    "pkg/package.json",
     "README.md",
     "LICENSE"
   ],
