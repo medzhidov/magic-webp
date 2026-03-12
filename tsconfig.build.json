@@ -4,7 +4,7 @@
     "noEmit": false,
     "declaration": true,
     "declarationMap": true,
-    "outDir": "./dist",
+    "outDir": "./lib",
     "rootDir": "./src-js",
     "skipLibCheck": true,
     "allowJs": true

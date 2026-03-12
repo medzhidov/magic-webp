@@ -1,6 +1,7 @@
 # Build output
 build/
 dist/
+lib/
 demo/dist/
 
 # Dependencies
