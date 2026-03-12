@@ -268,9 +268,16 @@ btnCropCenter.addEventListener("click", async () => {
     return;
   }
 
-  // Crop 200x200 from center
+  // Crop 200x200 from center (or smaller if image is too small)
   const width = webp.width || 0;
   const height = webp.height || 0;
+
+  // Check if image is large enough for 200x200 crop
+  if (width < 200 || height < 200) {
+    setStatus(`Image too small for 200×200 crop (${width}×${height}). Minimum size: 200×200`, "error");
+    return;
+  }
+
   const x = Math.max(0, Math.floor((width - 200) / 2));
   const y = Math.max(0, Math.floor((height - 200) / 2));
 

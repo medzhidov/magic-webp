@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "webp/decode.h"
 #include "webp/encode.h"
 #include "webp/demux.h"
@@ -25,8 +26,31 @@ typedef struct {
 static int transform_crop(WebPPicture* pic, void* params) {
     CropParams* p = (CropParams*)params;
 
+    // Validate crop parameters
+    if (p->x + p->width > pic->width || p->y + p->height > pic->height) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureCrop failed: crop region (%u,%u %ux%u) exceeds image bounds (%dx%d)",
+                p->x, p->y, p->width, p->height, pic->width, pic->height);
+        set_error(error_msg);
+        return 0;
+    }
+
+    if (p->width == 0 || p->height == 0) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureCrop failed: invalid crop dimensions (%ux%u)",
+                p->width, p->height);
+        set_error(error_msg);
+        return 0;
+    }
+
     if (!WebPPictureCrop(pic, p->x, p->y, p->width, p->height)) {
-        set_error("WebPPictureCrop failed");
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureCrop failed: unknown error (crop: %u,%u %ux%u, image: %dx%d)",
+                p->x, p->y, p->width, p->height, pic->width, pic->height);
+        set_error(error_msg);
         return 0;
     }
     return 1;
@@ -40,8 +64,21 @@ typedef struct {
 static int transform_resize(WebPPicture* pic, void* params) {
     ResizeParams* p = (ResizeParams*)params;
 
+    if (p->width == 0 || p->height == 0) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureRescale failed: invalid dimensions (%ux%u)",
+                p->width, p->height);
+        set_error(error_msg);
+        return 0;
+    }
+
     if (!WebPPictureRescale(pic, p->width, p->height)) {
-        set_error("WebPPictureRescale failed");
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureRescale failed: cannot resize from %dx%d to %ux%u",
+                pic->width, pic->height, p->width, p->height);
+        set_error(error_msg);
         return 0;
     }
     return 1;
@@ -95,13 +132,31 @@ static int transform_resize_and_crop(WebPPicture* pic, void* params) {
 
     // First resize
     if (!WebPPictureRescale(pic, scaled_w, scaled_h)) {
-        set_error("WebPPictureRescale failed");
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureRescale failed in cover mode: %dx%d -> %ux%u (scale: %.2f)",
+                pic->width, pic->height, scaled_w, scaled_h, scale);
+        set_error(error_msg);
+        return 0;
+    }
+
+    // Validate crop parameters before cropping
+    if (p->crop_x + p->target_width > scaled_w || p->crop_y + p->target_height > scaled_h) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureCrop failed in cover mode: crop region (%u,%u %ux%u) exceeds scaled image (%ux%u)",
+                p->crop_x, p->crop_y, p->target_width, p->target_height, scaled_w, scaled_h);
+        set_error(error_msg);
         return 0;
     }
 
     // Then crop
     if (!WebPPictureCrop(pic, p->crop_x, p->crop_y, p->target_width, p->target_height)) {
-        set_error("WebPPictureCrop failed");
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg),
+                "WebPPictureCrop failed in cover mode: crop (%u,%u %ux%u) from scaled image (%ux%u)",
+                p->crop_x, p->crop_y, p->target_width, p->target_height, scaled_w, scaled_h);
+        set_error(error_msg);
         return 0;
     }
 
@@ -212,7 +267,11 @@ static uint8_t* process_webp_animation(const uint8_t* webp_data, size_t webp_siz
                 output_width = pic.width;
                 output_height = pic.height;
             } else if (output_width != pic.width || output_height != pic.height) {
-                set_error("Transformed frames must have consistent dimensions");
+                char error_msg[256];
+                snprintf(error_msg, sizeof(error_msg),
+                        "Transformed frames must have consistent dimensions: frame %d is %dx%d but expected %ux%u (first frame dimensions)",
+                        iter.frame_num, pic.width, pic.height, output_width, output_height);
+                set_error(error_msg);
                 WebPPictureFree(&pic);
                 WebPDemuxReleaseIterator(&iter);
                 WebPMuxDelete(mux);

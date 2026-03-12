@@ -23,6 +23,7 @@ interface WorkerResponse {
   width?: number;
   height?: number;
   error?: string;
+  operation?: string;
 }
 
 /**
@@ -64,16 +65,16 @@ export class MagicWebpWorker {
   }
 
   private handleMessage(e: MessageEvent<WorkerResponse>) {
-    const { id, type, data, width, height, error } = e.data;
+    const { id, type, data, width, height, error, operation } = e.data;
     const pending = this.pendingRequests.get(id);
-    
+
     if (!pending) {
       console.warn('[MagicWebpWorker] Received response for unknown request:', id);
       return;
     }
-    
+
     this.pendingRequests.delete(id);
-    
+
     if (type === 'error') {
       pending.reject(new Error(error || 'Unknown error'));
     } else if (type === 'loaded') {
@@ -82,6 +83,15 @@ export class MagicWebpWorker {
       this.isLoaded = true;
       pending.resolve({ width, height });
     } else if (type === 'result') {
+      // Update dimensions if provided (e.g., from convert operation)
+      if (width !== undefined && height !== undefined) {
+        this.imageWidth = width;
+        this.imageHeight = height;
+        // Mark as loaded if this was a convert operation
+        if (operation === 'convert') {
+          this.isLoaded = true;
+        }
+      }
       pending.resolve(new Blob([data!.buffer as ArrayBuffer], { type: 'image/webp' }));
     }
   }
