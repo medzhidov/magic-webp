@@ -123,7 +123,7 @@ async function ensureWasm(): Promise<void> {
   debug("[magic-webp] Loading Emscripten WASM module...");
 
   // Import the Emscripten module factory
-  const createModule = (await import("./magic_webp.mjs")).default;
+  const createModule = (await import("../lib/magic_webp.mjs")).default;
   wasmModule = await createModule() as any;
 
   debug("[magic-webp] Module loaded, checking properties...");

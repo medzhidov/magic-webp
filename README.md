@@ -124,7 +124,7 @@ worker.terminate();
 - ✅ Use local dev server: `npx serve` or `python -m http.server`
 
 **5. Build Tools**
-- **Vite**: Use `?worker&url` import syntax (requires Vite config below):
+- **Vite**: Use `?worker&url` import syntax:
   ```typescript
   import WorkerUrl from 'magic-webp/worker?worker&url';
   const webp = new MagicWebpWorker(WorkerUrl);
@@ -132,55 +132,13 @@ worker.terminate();
 - **Webpack**: Use `worker-loader` or native Worker support
 - **Without bundler**: Copy `node_modules/magic-webp/lib/worker.js` to your public folder and use `new MagicWebpWorker('/worker.js')`
 
-### 6. Vite Configuration (Important!)
-
-Install the required plugins:
-
-```bash
-npm install -D vite-plugin-wasm vite-plugin-top-level-await
-```
-
-Update `vite.config.ts`:
-
-```typescript
-import wasm from 'vite-plugin-wasm';
-import topLevelAwait from 'vite-plugin-top-level-await';
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  plugins: [wasm(), topLevelAwait()],
-  optimizeDeps: {
-    exclude: ['magic-webp'],
-  },
-});
-```
-
-**Why?** `vite-plugin-wasm` handles WASM loading with the correct MIME type and streaming instantiation. Without it, you'll get errors like:
-- ❌ `Failed to execute 'compile' on 'WebAssembly': Incorrect response MIME type`
-- ❌ `expected magic word 00 61 73 6d, found 3c 21 44 4f`
-
-> ⚠️ **Note:** Both the Worker API and the Main Thread API require this Vite configuration — WASM loading happens in both cases.
-
-### Without bundler / other build tools
-
-If you're not using Vite, the library works with any HTTP server — no special configuration needed. The WASM module is located automatically via `import.meta.url`.
-
-The only requirement: **`magic_webp.wasm` must be in the same folder as `magic_webp.mjs`** on your server. Copy both `lib/` and `pkg/` preserving their relative structure:
-
-```bash
-cp -r node_modules/magic-webp/lib/ public/lib/
-cp -r node_modules/magic-webp/pkg/ public/pkg/
-```
-
-> ❌ Won't work with `file://` protocol — use a local HTTP server (`npx serve`, `python -m http.server`, etc.)
-
 **Common Issues:**
 ```typescript
 // ❌ WRONG: Cross-origin
 const webp = new MagicWebpWorker('https://cdn.com/worker.js');
 // Error: Failed to construct 'Worker': Script at '...' cannot be accessed from origin '...'
 
-// ✅ CORRECT: Vite (recommended)
+// ✅ CORRECT: Vite
 import WorkerUrl from 'magic-webp/worker?worker&url';
 const webp = new MagicWebpWorker(WorkerUrl);
 
@@ -580,7 +538,7 @@ magic-webp/
 │   └── worker.ts    # Web Worker for processing
 ├── tests/           # Native C tests
 ├── libwebp/         # Google's libwebp (submodule)
-└── pkg/             # Built WASM output
+└── lib/             # Build output (TypeScript + WASM, generated)
 ```
 
 ### Build Commands
