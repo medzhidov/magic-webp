@@ -5,6 +5,7 @@
 **Convert PNG/JPEG/GIF to WebP and process images in the browser using WebAssembly**
 
 [![npm version](https://img.shields.io/npm/v/magic-webp.svg)](https://www.npmjs.com/package/magic-webp)
+[![npm bundle size](https://img.shields.io/bundlephobia/minzip/magic-webp)](https://bundlephobia.com/package/magic-webp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
 [![WebAssembly](https://img.shields.io/badge/WebAssembly-libwebp-654FF0)](https://developers.google.com/speed/webp)

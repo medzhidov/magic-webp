@@ -2,7 +2,12 @@
 build/
 dist/
 lib/
+pkg/
 demo/dist/
+
+# npm packages
+*.tgz
+package/
 
 # Dependencies
 node_modules/
