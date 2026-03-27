@@ -22,6 +22,7 @@ tests/*.wasm
 
 # Emscripten SDK (large, should be installed locally)
 emsdk/
+.cmake-venv/
 
 # Editor
 .vscode/

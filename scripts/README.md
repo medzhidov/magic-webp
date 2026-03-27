@@ -36,6 +36,17 @@ PowerShell script to set up Emscripten SDK for building WASM.
 
 This script is automatically called by `build.ps1` if emsdk is not found.
 
+### `setup-emsdk.sh`
+
+Bash script to set up Emscripten SDK for building WASM on Linux/macOS.
+
+**Usage:**
+```bash
+./scripts/setup-emsdk.sh
+```
+
+This script is automatically called by `build.sh` if emsdk is not found.
+
 ## Testing
 
 For automated testing, use the test suite instead:

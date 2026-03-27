@@ -503,7 +503,7 @@ if (typeof Worker === 'undefined') {
 
 - Node.js 18+
 - pnpm (recommended) or npm
-- Emscripten SDK (automatically installed)
+- Emscripten SDK (auto-installed locally into `emsdk/` if missing)
 
 ### Setup
 
@@ -559,6 +559,8 @@ pnpm demo:watch
 # Build demo for production
 pnpm demo:build
 ```
+
+`pnpm build:wasm` bootstraps the local `emsdk/` directory, initializes the `libwebp` git submodule, and on Unix installs a project-local `cmake` into `.cmake-venv/` when needed.
 
 ### How It Works
 

@@ -1,37 +1,54 @@
 # Build script for magic-webp using Emscripten
 
+$ErrorActionPreference = "Stop"
+
+$RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$EmsdkDir = Join-Path $RootDir "emsdk"
+$LibwebpDir = Join-Path $RootDir "libwebp"
+$BuildDir = Join-Path $RootDir "build"
+$LibDir = Join-Path $RootDir "lib"
+
 Write-Host "Building magic-webp with Emscripten..." -ForegroundColor Cyan
 
-# Activate emsdk
-Write-Host "Activating emsdk..." -ForegroundColor Yellow
-& .\emsdk\emsdk_env.ps1
+if (-not (Test-Path (Join-Path $LibwebpDir "CMakeLists.txt"))) {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        throw "git is required to initialize the libwebp submodule."
+    }
 
-# Create build directory
-$buildDir = "build"
-if (Test-Path $buildDir) {
-    Write-Host "Cleaning build directory..." -ForegroundColor Yellow
-    Remove-Item -Recurse -Force $buildDir
-}
-New-Item -ItemType Directory -Path $buildDir | Out-Null
-
-# Create lib directory if it doesn't exist
-if (-not (Test-Path "lib")) {
-    New-Item -ItemType Directory -Path "lib" | Out-Null
+    Write-Host "Initializing libwebp submodule..." -ForegroundColor Yellow
+    & git -C $RootDir submodule update --init --recursive --depth 1 libwebp
 }
 
-# Run CMake with Emscripten
+if (-not (Get-Command emcc -ErrorAction SilentlyContinue)) {
+    if (Test-Path (Join-Path $EmsdkDir "emsdk_env.ps1")) {
+        Write-Host "Activating local emsdk..." -ForegroundColor Yellow
+        & (Join-Path $EmsdkDir "emsdk_env.ps1")
+    }
+
+    if (-not (Get-Command emcc -ErrorAction SilentlyContinue)) {
+        Write-Host "Emscripten not found or installation is incomplete. Installing/repairing local emsdk..." -ForegroundColor Yellow
+        & (Join-Path $RootDir "scripts\setup-emsdk.ps1")
+
+        Write-Host "Activating local emsdk..." -ForegroundColor Yellow
+        & (Join-Path $EmsdkDir "emsdk_env.ps1")
+    }
+}
+
+if (-not (Get-Command emcc -ErrorAction SilentlyContinue)) {
+    throw "Emscripten activation failed. Try removing emsdk and rerunning the build."
+}
+
+if (-not (Test-Path $LibDir)) {
+    New-Item -ItemType Directory -Path $LibDir | Out-Null
+}
+
 Write-Host "Running CMake..." -ForegroundColor Yellow
-Set-Location $buildDir
-emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
+& emcmake cmake -S $RootDir -B $BuildDir -DCMAKE_BUILD_TYPE=Release
 
-# Build
 Write-Host "Building..." -ForegroundColor Yellow
-ninja
+& cmake --build $BuildDir --config Release
 
-Set-Location ..
-
-# Copy type declarations to lib/
-Copy-Item "src-js/magic_webp.d.mts" "lib/magic_webp.d.mts"
+Copy-Item (Join-Path $RootDir "src-js\magic_webp.d.mts") (Join-Path $LibDir "magic_webp.d.mts")
 
 Write-Host "Build complete! Output in lib/" -ForegroundColor Green
 
